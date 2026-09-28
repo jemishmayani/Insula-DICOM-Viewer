@@ -1,5 +1,5 @@
 import http.server, json, threading
-STUDY=[{"0020000D":{"vr":"UI","Value":["1.2.3"]},"00100010":{"vr":"PN","Value":[{"Alphabetic":"KHAIRE^RAHUL"}]},"00080020":{"vr":"DA","Value":["20260928"]},"00080061":{"vr":"CS","Value":["MR"]}}]
+STUDY=[{"0020000D":{"vr":"UI","Value":["1.2.3"]},"00100010":{"vr":"PN","Value":[{"Alphabetic":"DOE^JANE"}]},"00080020":{"vr":"DA","Value":["20260928"]},"00080061":{"vr":"CS","Value":["MR"]}}]
 def mk(port, route, only_plain_json=False, reject_extras=False):
     class H(http.server.BaseHTTPRequestHandler):
         def log_message(self,*a): pass

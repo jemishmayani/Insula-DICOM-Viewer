@@ -1,0 +1,73 @@
+name: Build and test
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to attach APKs to releases on version tags
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      HAS_RELEASE_KEY: ${{ secrets.INSULA_KEYSTORE_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Android build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openjdk-21-jdk-headless android-sdk-platform-23 aapt dalvik-exchange apksigner zipalign
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: pip install -r tests/requirements.txt
+
+      - name: Build APK
+        env:
+          KEYSTORE_B64: ${{ secrets.INSULA_KEYSTORE_BASE64 }}
+          KEYSTORE_PASS: ${{ secrets.INSULA_KEYSTORE_PASS }}
+          KEY_ALIAS: ${{ secrets.INSULA_KEY_ALIAS }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            export INSULA_KEYSTORE="$RUNNER_TEMP/release.jks"
+            export INSULA_KEYSTORE_PASS="$KEYSTORE_PASS"
+            export INSULA_KEY_ALIAS="${KEY_ALIAS:-insula}"
+            echo "Signing with the release key from repository secrets."
+          else
+            echo "No release key configured; signing with a temporary debug key."
+          fi
+          ./build.sh
+
+      - name: Run tests
+        run: tests/run_tests.sh
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: InsulaDICOMViewer-apk
+          path: out/InsulaDICOMViewer-v*.apk
+
+      - name: Upload test renders
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-output
+          path: tests/.work/*.png
+          if-no-files-found: ignore
+
+      - name: Attach APK to release
+        # Only publish releases signed with your own key, so users can install updates over them.
+        if: startsWith(github.ref, 'refs/tags/v') && env.HAS_RELEASE_KEY == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/InsulaDICOMViewer-v*.apk
+          generate_release_notes: true

@@ -1,6 +1,0 @@
-# Reference decoders and helpers for tests/run_tests.sh (versions the suite was verified with)
-pydicom==3.0.2
-numpy==2.4.4
-pylibjpeg==2.1.0
-pylibjpeg-libjpeg==2.4.0
-pylibjpeg-openjpeg==2.6.0

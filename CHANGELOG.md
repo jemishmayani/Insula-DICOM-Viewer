@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.6.0
+- New About page (Settings › About Insula, or tap the card at the top of Settings): version, disclaimer, links to the guides, source code, releases, issues, and privacy policy, licence texts, and developer contact
+- Check for updates: asks GitHub for the latest release only when tapped, and offers the download
+- The GNU GPL, NOTICE, and JJ2000 licence texts are bundled in the app, as the GPL requires for distributed copies
+- Copy app and device info for bug reports; Report a problem warns never to attach patient images
+- The first-launch disclaimer shows the installed version
+- Releases can be published from a locally signed APK: the workflow checks the signing certificate and version before attaching it
+
 ## 1.5.1
 - Licensed under the GNU GPL v3 or later, with an additional permission for the bundled JJ2000 decoder (see NOTICE). Source files carry SPDX licence headers
 - About shows the copyright, licence, no-warranty notice, and a link to the source code. Settings has a new "Source code and license" row

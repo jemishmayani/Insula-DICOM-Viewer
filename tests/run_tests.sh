@@ -70,6 +70,7 @@ step "Decoders vs pydicom/OpenJPEG" decoders
 step "MPR geometry (phantoms)" timeout 600 java -Djava.awt.headless=true -Dwork="$WORK" -cp "$CP" com.insula.dicomviewer.MprPhantomTest
 step "DICOM writer (saved MPR series)" writer
 step "Backup, annotations, study sets" backup
+step "Update checker (version compare, release parsing)" $JAVA -cp "$CP" com.insula.dicomviewer.UpdateCheckTest
 step "PACS: two institutions, password and token" with_server $T/python/mock_two_hospitals.py com.insula.dicomviewer.PacsProfilesTest
 step "PACS: HTTP 406 recovery and path discovery" with_server $T/python/mock_406_portal.py com.insula.dicomviewer.Pacs406Test
 step "PACS: download speed, fallback, stream parser" with_server $T/python/mock_slow_pacs.py com.insula.dicomviewer.DownloadBenchmark

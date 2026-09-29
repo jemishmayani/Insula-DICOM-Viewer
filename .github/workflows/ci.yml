@@ -77,3 +77,49 @@ jobs:
         with:
           files: out/InsulaDICOMViewer-v*.apk
           generate_release_notes: true
+
+  # Publishes a release APK that was built and signed outside CI (kept on the release-binaries branch),
+  # for when the signing key isn't stored in repository secrets. Runs only for version tags, after tests pass.
+  publish-prebuilt:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      HAS_RELEASE_KEY: ${{ secrets.INSULA_KEYSTORE_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch prebuilt APK
+        if: env.HAS_RELEASE_KEY != 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: release-binaries
+          path: rb
+
+      - name: Verify signature and version
+        if: env.HAS_RELEASE_KEY != 'true'
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq apksigner aapt >/dev/null
+          V="${GITHUB_REF_NAME#v}"
+          APK="rb/InsulaDICOMViewer-v$V.apk"
+          [ -f "$APK" ] || { echo "No $APK on the release-binaries branch"; exit 1; }
+          apksigner verify "$APK"
+          CERT=$(apksigner verify --print-certs "$APK" | grep "SHA-256 digest" | head -1 | awk '{print $NF}')
+          WANT=$(tr -d '[:space:]' < .github/release-signing-cert.sha256)
+          [ "$CERT" = "$WANT" ] || { echo "Signing certificate $CERT doesn't match the release key $WANT"; exit 1; }
+          GOT=$(aapt dump badging "$APK" | grep -o "versionName='[^']*'" | cut -d"'" -f2)
+          [ "$GOT" = "$V" ] || { echo "APK version $GOT doesn't match tag $V"; exit 1; }
+          SUM=$(sha256sum "$APK" | cut -d' ' -f1)
+          { [ -f "rb/notes/v$V.md" ] && cat "rb/notes/v$V.md"; echo; echo "**SHA-256** of \`InsulaDICOMViewer-v$V.apk\`: \`$SUM\`"; } > release-body.md
+          echo "APK=$APK" >> "$GITHUB_ENV"
+          echo "Verified $APK: version $GOT, certificate $CERT"
+
+      - name: Publish release
+        if: env.HAS_RELEASE_KEY != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Insula DICOM Viewer ${{ github.ref_name }}
+          body_path: release-body.md
+          files: ${{ env.APK }}
+          make_latest: true

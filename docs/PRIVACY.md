@@ -1,6 +1,6 @@
 # Privacy policy
 
-*Insula DICOM Viewer for Android. Effective 29 September 2026.*
+*Insula DICOM Viewer for Android. Effective 29 September 2026 (updated for version 1.6.0: optional update check).*
 
 Insula is designed so that your images stay on your phone. This policy explains what the app does with data and what it does not do.
 
@@ -8,7 +8,7 @@ Insula is designed so that your images stay on your phone. This policy explains 
 
 - The developer **does not receive** your images, patient details, measurements, or settings.
 - There are **no accounts, ads, analytics, tracking, or crash reporting**.
-- The app connects only to servers **you** choose: the PACS servers you configure and the download links you enter.
+- The app connects only to servers **you** choose: the PACS servers you configure, the download links you enter, and GitHub when you tap **Check for updates**.
 
 ## Data the app processes on your device
 
@@ -28,6 +28,7 @@ The app uses the internet permission only to:
 
 - search and download studies from PACS servers you have added as profiles
 - download files from links you enter or open with the app
+- check for a newer version when you tap **Check for updates** in About. The app asks GitHub's public API (`api.github.com`) for the latest release of this project. GitHub receives the request like any web visit (including your IP address) under [GitHub's privacy statement](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement); the app sends no personal data or images. It never checks automatically
 
 These connections go directly from your phone to that server; the developer does not operate them or see their traffic. Plain `http://` addresses are unencrypted, and the app warns you when you save one.
 
@@ -39,7 +40,7 @@ Images, PDFs, ZIP archives, study sets, and settings files leave the app only wh
 
 | Permission | Why |
 |---|---|
-| Internet | PACS search and download, and downloads from links you provide |
+| Internet | PACS search and download, downloads from links you provide, and Check for updates |
 
 Files are opened through Android's file picker, which grants access only to what you select. The app does not request access to storage, camera, location, contacts, or the microphone.
 

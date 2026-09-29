@@ -1,6 +1,6 @@
 # User guide
 
-*Insula DICOM Viewer 1.5.1*
+*Insula DICOM Viewer 1.6.0*
 
 The same information is in the app under **Settings › Guide**, with search. Long-press any icon in the app to see its name.
 
@@ -165,11 +165,19 @@ Search by patient name (a trailing `*` is added automatically), patient ID, date
 | Privacy and security | App lock, Block screenshots, Hide patient details in exports |
 | PACS | PACS profiles |
 | Backup and transfer | Export/import settings; export/import study sets |
-| Help and legal | Guide; About, disclaimer, and licences; Source code and licence |
+| Help and legal | Guide; About Insula |
 | Storage | Library size; Delete all studies |
 
 - **Settings file (.json):** preferences, albums, and PACS profiles, for moving to a new phone. PACS passwords are included only if you protect them with a passphrase.
 - **Study set (.zip):** DICOM files with their measurements, key images, and albums. Importing a set also creates an album with its name. Study sets open in any DICOM viewer; the extra data is used by Insula.
+
+### About Insula
+
+Open **Settings › About Insula**, or tap the card at the top of Settings. It shows the version and has **Check for updates**, the medical-use disclaimer, links (in-app guide, online user guide, source code, all releases, report a problem, privacy policy), the full licence texts (GNU GPL v3, the NOTICE with the JJ2000 permission, and JJ2000's licence), and developer contact details. **Copy app and device info** copies your version, Android version, and phone model for bug reports.
+
+### Updating the app
+
+Insula isn't updated automatically. In **About Insula**, tap **Check for updates**; the app contacts GitHub only then. If a newer version exists, tap **Download**, open the downloaded file, and install it over the current version. Your studies, measurements, and settings are kept, because releases are signed with the same key. You can also download any version from [Releases](https://github.com/jemishmayani/Insula-DICOM-Viewer/releases).
 
 ## 9. Troubleshooting
 
@@ -182,4 +190,5 @@ Search by patient name (a trailing `*` is added automatically), patient ID, date
 | PACS: "Can't find the server" or timeouts | The server may only be reachable on the hospital network or VPN |
 | MPR: "Slices have different orientations" | The series mixes a localizer with the stack; choose a single stack |
 | MPR: "reconstructed at reduced resolution" | The series was too large for the phone's memory; detail is reduced |
-| An update won't install over the old version | The new APK is signed with a different key; uninstall the old version first (this deletes its library) |
+| An update won't install over the old version | The APK is signed with a different key (for example a test build). Use the APK from Releases, or uninstall first (this deletes the library) |
+| Check for updates: "GitHub is limiting requests" | GitHub allows about 60 checks an hour per network. Try later, or open All releases in About |

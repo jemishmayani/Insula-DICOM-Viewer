@@ -1,6 +1,6 @@
 # Intended use and limitations
 
-*Applies to Insula DICOM Viewer 1.5.1. Last updated 29 September 2026.*
+*Applies to Insula DICOM Viewer 1.6.0. Last updated 29 September 2026.*
 
 ## Product description
 

@@ -114,6 +114,8 @@ public class GuideActivity extends BaseActivity {
             {"export", "Export study set", "Packs all studies, an album, or chosen studies into a ZIP with their measurements, key images, and albums, optionally anonymized."},
             {"import", "Import study set", "Adds a study set's studies and restores its measurements, key images, and albums. The set also appears as an album."},
             {"trash", "Delete all studies", "Removes every study and its measurements from this phone."},
+            {"info", "About Insula", "Version, Check for updates, the disclaimer, links to the source code, releases, user guide, and privacy policy, the licence texts, and how to contact the developer. Also opens when you tap the card at the top of Settings."},
+            {"download", "Check for updates", "Asks GitHub for the newest release, only when you tap it. If there is one, the download opens in your browser; install it over this version and your studies and settings are kept."},
     };
 
     final List<View[]> rows = new ArrayList<>();   // {rowView, sectionHeader}

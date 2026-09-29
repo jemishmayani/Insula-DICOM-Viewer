@@ -1,0 +1,37 @@
+Insula DICOM Viewer
+Copyright (C) 2026 Jemish Mayani
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+this program (the LICENSE file). If not, see <https://www.gnu.org/licenses/>.
+
+NOT A MEDICAL DEVICE. This software is intended for reference, teaching, and
+patient use. It is not intended for primary diagnosis. See docs/INTENDED_USE.md.
+
+-------------------------------------------------------------------------------
+Additional permission under GNU GPL version 3 section 7
+-------------------------------------------------------------------------------
+
+If you modify this Program, or any covered work, by linking or combining it
+with the JJ2000 JPEG 2000 codec (or a modified version of that library),
+containing parts covered by the terms of the JJ2000 license (see
+licenses/JJ2000-COPYRIGHT.txt), the licensors of this Program grant you
+additional permission to convey the resulting work. Corresponding Source for a
+non-source form of such a combination shall include the source code for the
+parts of JJ2000 used as well as that of the covered work.
+
+-------------------------------------------------------------------------------
+Third-party components
+-------------------------------------------------------------------------------
+
+src/ucar/jpeg/   JJ2000 JPEG 2000 decoder, from https://github.com/Unidata/jj2000
+                 Licensed under the JJ2000 license: licenses/JJ2000-COPYRIGHT.txt
+                 (not covered by the GPL; see THIRD_PARTY_NOTICES.md)

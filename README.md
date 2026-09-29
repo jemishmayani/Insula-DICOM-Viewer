@@ -63,6 +63,7 @@ A fast, private DICOM viewer for Android phones and tablets: open studies from f
 - Share images (PNG/JPEG), key images as PDF, and anonymized ZIPs
 - Export and import settings (PACS passwords optional, passphrase-protected) and study sets
 - App lock with device PIN or biometrics, screenshot blocking
+- About page with Check for updates (only when you tap it), licences, and links
 
 ## Supported formats
 
@@ -80,7 +81,7 @@ Grayscale (8–32 bit, signed and unsigned), RGB, YBR (full, 4:2:2, ICT, RCT), p
 
 ## Install
 
-Download the APK from [Releases](../../releases), open it on your phone, and allow installing from that source when asked.
+Download the APK from [Releases](../../releases/latest), open it on your phone, and allow installing from that source when asked. To update later, use **Settings › About Insula › Check for updates**, or download the new APK and install it over the old one. Your studies and settings are kept.
 
 ## Build from source
 

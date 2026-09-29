@@ -793,7 +793,9 @@ public class MainActivity extends BaseActivity {
     }
 
     void showDisclaimer(final boolean first) {
-        AlertDialog.Builder b = new AlertDialog.Builder(this).setTitle("Insula DICOM Viewer 1.5.0")
+        String ver = "";
+        try { ver = " " + getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception ignored) { }
+        AlertDialog.Builder b = new AlertDialog.Builder(this).setTitle("Insula DICOM Viewer" + ver)
                 .setMessage("For reference, teaching, and patient use only. This app is not a cleared medical device and must not be used for primary diagnosis.\n\n"
                         + "Images are stored in this app's private storage, which Android encrypts on modern devices. Nothing is uploaded unless you connect to a server yourself.");
         if (first) {

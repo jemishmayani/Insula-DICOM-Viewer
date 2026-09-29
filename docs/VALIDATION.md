@@ -1,6 +1,6 @@
 # Verification and validation report
 
-*Insula DICOM Viewer 1.5.1. Last updated 29 September 2026.*
+*Insula DICOM Viewer 1.6.0. Last updated 29 September 2026.*
 
 This report summarizes automated **software verification**: whether the software does what it was designed to do. It is **not clinical validation**, and it does not establish fitness for diagnostic use (see [INTENDED_USE.md](INTENDED_USE.md)).
 

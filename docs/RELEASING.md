@@ -22,11 +22,24 @@ The APK is written to `out/InsulaDICOMViewer-v<version>.apk`. Never commit the k
 
 ## Publishing on GitHub
 
+There are two ways. Both run the full test suite before anything is published, and both produce releases that install over earlier versions.
+
+### A. Signed locally (no secrets needed)
+
+1. Build and sign locally with your release key (see above).
+2. Commit the APK to the `release-binaries` branch as `InsulaDICOMViewer-v<version>.apk`, with optional release notes in `notes/v<version>.md`.
+3. Push the tag, for example `git tag v1.6.0 && git push origin v1.6.0`.
+
+The `publish-prebuilt` job checks that the APK is signed with the certificate in `.github/release-signing-cert.sha256` and that its version matches the tag. It then creates the release with the notes and the APK's SHA-256 checksum.
+
+### B. Signed by GitHub Actions
+
+
 With the repository secrets `INSULA_KEYSTORE_BASE64`, `INSULA_KEYSTORE_PASS`, and `INSULA_KEY_ALIAS` set:
 
 ```bash
-git tag v1.5.1
-git push origin v1.5.1
+git tag v1.6.0
+git push origin v1.6.0
 ```
 
 GitHub Actions builds, tests, signs, and attaches the APK to a GitHub Release. Without the secrets, the APK is only available as a workflow artifact, signed with a temporary debug key.

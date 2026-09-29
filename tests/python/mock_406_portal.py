@@ -1,3 +1,6 @@
+# Insula DICOM Viewer
+# Copyright (C) 2026 Jemish Mayani
+# SPDX-License-Identifier: GPL-3.0-or-later
 import http.server, json, threading
 STUDY=[{"0020000D":{"vr":"UI","Value":["1.2.3"]},"00100010":{"vr":"PN","Value":[{"Alphabetic":"DOE^JANE"}]},"00080020":{"vr":"DA","Value":["20260928"]},"00080061":{"vr":"CS","Value":["MR"]}}]
 def mk(port, route, only_plain_json=False, reject_extras=False):

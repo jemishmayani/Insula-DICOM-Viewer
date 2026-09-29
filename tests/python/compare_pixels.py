@@ -1,3 +1,6 @@
+# Insula DICOM Viewer
+# Copyright (C) 2026 Jemish Mayani
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Compares the app's decoded pixels (from DecodeDump) with pydicom's reference decoders.
 
 Lossless and uncompressed data must match exactly; lossy JPEG 2000 may differ by 2 levels.

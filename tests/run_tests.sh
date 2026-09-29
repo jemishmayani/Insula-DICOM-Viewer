@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Insula DICOM Viewer
+# Copyright (C) 2026 Jemish Mayani
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Runs the desktop test suite against the app's own classes (no emulator needed).
 # Requirements: the build tools from ../build.sh, python3, and
 #   pip install -r tests/requirements.txt

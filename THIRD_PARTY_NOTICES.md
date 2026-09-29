@@ -1,5 +1,7 @@
 # Third-party notices
 
+Insula's own code is licensed under the GNU GPL v3 or later (see [LICENSE](LICENSE)). The components below keep their own licences. The additional permission in [NOTICE](NOTICE) allows Insula to be distributed combined with JJ2000.
+
 ## JJ2000 (JPEG 2000 decoder)
 
 - Source: https://github.com/Unidata/jj2000 (package `ucar.jpeg.jj2000`)

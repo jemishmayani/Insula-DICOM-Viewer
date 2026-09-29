@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Insula DICOM Viewer
+# Copyright (C) 2026 Jemish Mayani
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Builds Insula DICOM Viewer without Gradle, using Ubuntu's Android packages:
 #   sudo apt install openjdk-21-jdk-headless android-sdk-platform-23 aapt dalvik-exchange apksigner zipalign
 #

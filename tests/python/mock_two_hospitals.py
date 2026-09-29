@@ -1,3 +1,6 @@
+# Insula DICOM Viewer
+# Copyright (C) 2026 Jemish Mayani
+# SPDX-License-Identifier: GPL-3.0-or-later
 import http.server, json, sys, base64, threading, pydicom
 from pydicom.data import get_testdata_file
 CT=open(get_testdata_file('CT_small.dcm'),'rb').read()

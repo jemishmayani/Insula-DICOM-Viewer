@@ -1,3 +1,9 @@
+/*
+ * Insula DICOM Viewer
+ * Copyright (C) 2026 Jemish Mayani
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * Licensed under the GNU GPL v3 or later, with an additional permission for JJ2000. See LICENSE and NOTICE.
+ */
 package com.insula.dicomviewer;
 
 import android.app.Activity;

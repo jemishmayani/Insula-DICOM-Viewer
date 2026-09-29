@@ -1,3 +1,6 @@
+# Insula DICOM Viewer
+# Copyright (C) 2026 Jemish Mayani
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Downloads extra pydicom test files (JPEG Lossless, JPEG 2000, RLE) and prints every test file path."""
 import glob
 import os

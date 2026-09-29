@@ -1,3 +1,9 @@
+/*
+ * Insula DICOM Viewer
+ * Copyright (C) 2026 Jemish Mayani
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * Licensed under the GNU GPL v3 or later, with an additional permission for JJ2000. See LICENSE and NOTICE.
+ */
 package com.insula.dicomviewer;
 
 import java.io.ByteArrayOutputStream;
@@ -69,7 +75,7 @@ final class DicomWriter {
         writeTo(meta, strEl(0x00020003, "UI", sopUid));
         writeTo(meta, strEl(0x00020010, "UI", Dicom.TS_EXPLICIT_LE));
         writeTo(meta, strEl(0x00020012, "UI", "2.25.182406418203495711231137284109815413937"));
-        writeTo(meta, strEl(0x00020013, "SH", "INSULA_1_3"));
+        writeTo(meta, strEl(0x00020013, "SH", "INSULA_1_5"));
         byte[] m = meta.toByteArray();
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         out.write(new byte[128], 0, 128);

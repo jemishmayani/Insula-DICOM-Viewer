@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 1.5.1
+- Licensed under the GNU GPL v3 or later, with an additional permission for the bundled JJ2000 decoder (see NOTICE). Source files carry SPDX licence headers
+- About shows the copyright, licence, no-warranty notice, and a link to the source code. Settings has a new "Source code and license" row
+- Documentation: user guide, intended use and limitations, privacy policy, DICOM conformance statement, verification report, architecture, and release checklist (docs/, publishable with GitHub Pages)
+- Created DICOM files now carry the implementation version name INSULA_1_5
 - Background worker threads no longer keep the process alive, which fixed test runs hanging on multi-core CI machines
 - CI: 10-minute limit per test, 30-minute job limit, and a newer push cancels the older run
 

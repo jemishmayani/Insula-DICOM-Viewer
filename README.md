@@ -1,12 +1,29 @@
 # Insula DICOM Viewer
 
+[![Build and test](https://github.com/jemishmayani/Insula-DICOM-Viewer/actions/workflows/ci.yml/badge.svg)](https://github.com/jemishmayani/Insula-DICOM-Viewer/actions/workflows/ci.yml)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+![Android 7.0+](https://img.shields.io/badge/Android-7.0%2B-3ddc84.svg)
+
 A fast, private DICOM viewer for Android phones and tablets: open studies from files, patient CDs, and hospital PACS; read them with measurement tools; reconstruct them in MPR and 3D; and share anonymized copies.
 
-> **Not a medical device.** Insula is for reference, teaching, and patient use. It is not cleared for primary diagnosis.
+> **Not a medical device.** Insula is for reference, teaching, and patient use. It is not cleared for primary diagnosis. See [Intended use and limitations](docs/INTENDED_USE.md).
 
 - Android 7.0 (API 24) and newer
 - No Gradle, no third-party Android libraries, no ads, no analytics
 - Images stay in app-private storage; nothing leaves the phone unless you share it or connect to a server
+
+## Documentation
+
+| Document | For |
+|---|---|
+| [User guide](docs/USER_GUIDE.md) | Everyone: every screen and tool |
+| [Intended use and limitations](docs/INTENDED_USE.md) | Clinicians, institutions, reviewers |
+| [Privacy policy](docs/PRIVACY.md) | Users and app stores |
+| [DICOM conformance statement](docs/DICOM_CONFORMANCE.md) | Hospital IT and PACS administrators |
+| [Verification and validation](docs/VALIDATION.md) | Anyone assessing quality |
+| [Architecture](docs/ARCHITECTURE.md) | Developers |
+| [Releasing](docs/RELEASING.md) | Maintainer: builds, signing, Google Play checklist |
+| [Changelog](CHANGELOG.md) · [Security](SECURITY.md) · [Third-party notices](THIRD_PARTY_NOTICES.md) | |
 
 ## Features
 
@@ -135,6 +152,9 @@ src/com/insula/dicomviewer/
   Ui.java, Icons.java        UI components and code-drawn icons
 src/ucar/jpeg/...            JJ2000 JPEG 2000 decoder (third-party, see below)
 tests/                       desktop test suite and mock PACS servers
+docs/                        user, regulatory, technical, and release documentation (GitHub Pages)
+LICENSE, NOTICE              GNU GPL v3, copyright, and the JJ2000 additional permission
+licenses/                    third-party licence texts
 ```
 
 ## Privacy and security
@@ -144,22 +164,24 @@ tests/                       desktop test suite and mock PACS servers
 - Exported settings files include passwords only if you choose to, protected by a passphrase (PBKDF2 and AES-GCM).
 - Anonymized exports blank identifying attributes and private tags. They do not remove text burned into the pixels.
 
-Please report security issues privately; see [SECURITY.md](SECURITY.md). **Never attach real patient images to issues.**
+Full details: [Privacy policy](docs/PRIVACY.md). Please report security issues privately; see [SECURITY.md](SECURITY.md). **Never attach real patient images to issues.**
 
 ## Third-party code
 
 JPEG 2000 decoding uses **JJ2000** (from [Unidata/jj2000](https://github.com/Unidata/jj2000)), included in `src/ucar/jpeg/` without the display and command-line classes. Its copyright notice is in [licenses/JJ2000-COPYRIGHT.txt](licenses/JJ2000-COPYRIGHT.txt) and in the app's About screen. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-## License
-
-No license has been chosen yet, so all rights are reserved by default. Add a `LICENSE` file before accepting outside contributions.
-
 ## Releases
 
-Push a version tag (for example `git tag v1.5.0 && git push --tags`) and GitHub Actions attaches the signed APK to a GitHub Release. This happens only when your release key is stored in the repository secrets (Settings › Secrets and variables › Actions):
+Signed APKs are published on the [Releases](../../releases) page. Maintainers: see [docs/RELEASING.md](docs/RELEASING.md) for signing, tagging, and the Google Play checklist.
 
-- `INSULA_KEYSTORE_BASE64`: the output of `base64 -w0 release.jks`
-- `INSULA_KEYSTORE_PASS`: the keystore password
-- `INSULA_KEY_ALIAS`: the key alias, for example `insula`
+## License
 
-Without these secrets, every push still builds and tests the app, and the APK is available as a workflow artifact, signed with a temporary debug key.
+Copyright (C) 2026 Jemish Mayani.
+
+Insula is free software: you can redistribute it and/or modify it under the terms of the [GNU General Public License](LICENSE) as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed **without any warranty**.
+
+Under GPL section 7, you are additionally permitted to combine Insula with the bundled JJ2000 JPEG 2000 decoder, which has its own licence. See [NOTICE](NOTICE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Contributing
+
+Insula is maintained by one person and isn't accepting pull requests yet. Bug reports and feature ideas are welcome as [issues](../../issues). Never attach real patient images.

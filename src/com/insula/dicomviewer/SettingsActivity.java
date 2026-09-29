@@ -1,3 +1,9 @@
+/*
+ * Insula DICOM Viewer
+ * Copyright (C) 2026 Jemish Mayani
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * Licensed under the GNU GPL v3 or later, with an additional permission for JJ2000. See LICENSE and NOTICE.
+ */
 package com.insula.dicomviewer;
 
 import android.app.AlertDialog;
@@ -25,6 +31,7 @@ import java.util.Map;
 
 public class SettingsActivity extends BaseActivity {
     static final int REQ_SETTINGS_FILE = 31, REQ_STUDY_SET = 32;
+    static final String SOURCE_URL = "https://github.com/jemishmayani/Insula-DICOM-Viewer";
     TextView storage, pacsRow;
 
     @Override protected void onCreate(Bundle b) {
@@ -95,6 +102,12 @@ public class SettingsActivity extends BaseActivity {
         g = Ui.group(this, c, "Help and legal");
         Ui.setting(this, g, "book", Ui.C_PURPLE, "Guide", "What every tool does, with search", null, new View.OnClickListener() { public void onClick(View v) { startActivity(new Intent(SettingsActivity.this, GuideActivity.class)); } });
         Ui.setting(this, g, "info", Ui.C_PURPLE, "About, disclaimer, and licenses", null, null, new View.OnClickListener() { public void onClick(View v) { about(); } });
+        Ui.setting(this, g, "export", Ui.C_PURPLE, "Source code and license", "Free software under the GNU GPL v3", null, new View.OnClickListener() {
+            public void onClick(View v) {
+                try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(SOURCE_URL))); }
+                catch (Exception e) { Ui.toast(SettingsActivity.this, SOURCE_URL); }
+            }
+        });
 
         g = Ui.group(this, c, "Storage");
         Ui.setting(this, g, "trash", Ui.C_RED, "Delete all studies", "Removes every study and its measurements from this phone", null, new View.OnClickListener() {
@@ -269,7 +282,11 @@ public class SettingsActivity extends BaseActivity {
         String ver = "";
         try { ver = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception ignored) { }
         ScrollView sv = new ScrollView(this);
-        TextView t = Ui.text(this, "For reference, teaching, and patient use only. This app is not a cleared medical device and must not be used for primary diagnosis.\n\n"
+        TextView t = Ui.text(this, "Copyright (C) 2026 Jemish Mayani\n\n"
+                + "This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License "
+                + "as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. "
+                + "It comes with ABSOLUTELY NO WARRANTY. Source code and the full license: " + SOURCE_URL + "\n\n"
+                + "For reference, teaching, and patient use only. This app is not a cleared medical device and must not be used for primary diagnosis.\n\n"
                 + "Images are stored in this app's private storage, which Android encrypts on modern devices. Nothing is uploaded unless you connect to a server yourself.\n\n"
                 + "THIRD-PARTY NOTICES\n\nJPEG 2000 decoding uses JJ2000.\n\n" + Licenses.JJ2000, 13.5f, Ui.TEXT);
         int p = Ui.dp(this, 22);

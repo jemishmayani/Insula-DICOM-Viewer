@@ -8,6 +8,7 @@ cd "$(dirname "$0")/.."
 T=tests; WORK=$T/.work; OUT=$T/.out; CACHE=$T/.cache
 AJ=${ANDROID_JAR:-/usr/lib/android-sdk/platforms/android-23/android.jar}
 ORG_JSON_TAG=20250517
+JAVA="timeout 600 java"   # no single test may run longer than 10 minutes
 
 [ -f obj/com/insula/dicomviewer/Dicom.class ] || ./build.sh || exit 1
 rm -rf "$WORK" "$OUT"; mkdir -p "$WORK" "$OUT" "$CACHE/org-json"
@@ -29,13 +30,13 @@ step() { local name=$1; shift; echo; echo "=== $name ==="; if "$@"; then PASSED+
 
 decoders() {
   python3 $T/python/fetch_testdata.py > "$WORK/files.txt" || return 1
-  java -cp "$CP" -Dout="$WORK/pixels" DecodeDump $(cat "$WORK/files.txt") > "$WORK/decode.txt" 2>/dev/null
+  $JAVA -cp "$CP" -Dout="$WORK/pixels" DecodeDump $(cat "$WORK/files.txt") > "$WORK/decode.txt" 2>/dev/null
   grep -c '^OK' "$WORK/decode.txt" | xargs echo "decoded files:"
   python3 $T/python/compare_pixels.py "$WORK/decode.txt" "$WORK/pixels"
 }
 
 writer() {
-  java -cp "$CP" -Dwork="$WORK" com.insula.dicomviewer.DicomWriterTest || return 1
+  $JAVA -cp "$CP" -Dwork="$WORK" com.insula.dicomviewer.DicomWriterTest || return 1
   python3 - "$WORK/mpr_saved.dcm" <<'PY'
 import sys, warnings, numpy as np, pydicom
 warnings.filterwarnings("ignore")
@@ -50,20 +51,20 @@ PY
 
 backup() {
   local td; td=$(python3 -c "import os,pydicom;print(os.path.join(os.path.dirname(pydicom.data.__file__),'test_files'))")
-  java -cp "$CP" -Dwork="$WORK" -Dtestdata="$td" com.insula.dicomviewer.BackupTest
+  $JAVA -cp "$CP" -Dwork="$WORK" -Dtestdata="$td" com.insula.dicomviewer.BackupTest
 }
 
 with_server() {  # with_server <script> <java class>
   local log="$WORK/$(basename "$1").log"
   python3 "$1" > "$log" 2>&1 & local pid=$!
   for _ in $(seq 1 60); do grep -q '^up' "$log" 2>/dev/null && break; sleep 0.5; done
-  java -cp "$CP" -Dwork="$WORK" "$2" 2>/dev/null; local rc=$?
+  $JAVA -cp "$CP" -Dwork="$WORK" "$2" 2>/dev/null; local rc=$?
   kill $pid 2>/dev/null; wait $pid 2>/dev/null
   return $rc
 }
 
 step "Decoders vs pydicom/OpenJPEG" decoders
-step "MPR geometry (phantoms)" java -Djava.awt.headless=true -Dwork="$WORK" -cp "$CP" com.insula.dicomviewer.MprPhantomTest
+step "MPR geometry (phantoms)" timeout 600 java -Djava.awt.headless=true -Dwork="$WORK" -cp "$CP" com.insula.dicomviewer.MprPhantomTest
 step "DICOM writer (saved MPR series)" writer
 step "Backup, annotations, study sets" backup
 step "PACS: two institutions, password and token" with_server $T/python/mock_two_hospitals.py com.insula.dicomviewer.PacsProfilesTest

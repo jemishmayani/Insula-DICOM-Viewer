@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+- Background worker threads no longer keep the process alive, which fixed test runs hanging on multi-core CI machines
+- CI: 10-minute limit per test, 30-minute job limit, and a newer push cancels the older run
+
 ## 1.5.0
 - JPEG 2000 decoding (lossless and lossy) through the bundled JJ2000 decoder, verified pixel-exact against OpenJPEG on lossless files
 - PACS downloads 10–30× faster: whole series per request, three series in parallel, connection reuse, and parallel per-image fallback. Progress shows images, size, and speed

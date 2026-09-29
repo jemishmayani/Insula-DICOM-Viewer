@@ -23,7 +23,7 @@ final class AnnStore {
     static File file;
     static final Map<String, List<DicomView.Ann>> map = new HashMap<>();
     static final Set<String> keys = new HashSet<>();
-    static final ExecutorService IO = Executors.newSingleThreadExecutor();
+    static final ExecutorService IO = Executors.newSingleThreadExecutor(Library.daemon("insula-annstore"));
 
     static synchronized void init(File dir) {
         file = new File(dir, "annotations.json");

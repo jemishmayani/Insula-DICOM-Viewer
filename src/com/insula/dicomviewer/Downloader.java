@@ -172,7 +172,7 @@ final class Downloader {
 
     /** Fallback for servers without series-level retrieval: fetch instances, several at a time. */
     void fetchInstances(String seriesUid, List<String> sops) throws Exception {
-        ExecutorService pool = Executors.newFixedThreadPool(INSTANCE_THREADS);
+        ExecutorService pool = Executors.newFixedThreadPool(INSTANCE_THREADS, Library.daemon("insula-dl-instance"));
         final String base = p.base() + "/studies/" + studyUid + "/series/" + seriesUid + "/instances/";
         final String[] accept = {ACCEPT_ANY};
         List<Future<Void>> fs = new ArrayList<>();
@@ -206,7 +206,7 @@ final class Downloader {
 
     /** Runs the whole download. Returns null on success or an error message. */
     String run(final Listener l) {
-        final Thread ticker = new Thread() {
+        final Thread ticker = new Thread("insula-dl-progress") {
             public void run() {
                 while (!isInterrupted()) {
                     l.progress(done.get(), total, bytes.get());
@@ -214,6 +214,7 @@ final class Downloader {
                 }
             }
         };
+        ticker.setDaemon(true);
         try {
             String sb = p.base() + "/studies/" + studyUid;
             JSONArray series = new JSONArray(new String(PacsActivity.json(p, sb + "/series"), "UTF-8"));
@@ -235,7 +236,7 @@ final class Downloader {
             }
             total = count;
             ticker.start();
-            ExecutorService pool = Executors.newFixedThreadPool(SERIES_THREADS);
+            ExecutorService pool = Executors.newFixedThreadPool(SERIES_THREADS, Library.daemon("insula-dl-series"));
             List<Future<Void>> fs = new ArrayList<>();
             for (int i = 0; i < seriesUids.size(); i++) {
                 final String se = seriesUids.get(i);

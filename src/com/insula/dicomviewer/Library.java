@@ -406,8 +406,15 @@ public final class Library {
     static long cacheBytes, maxCache = 64L * 1024 * 1024;
     static final LinkedHashMap<String, Dicom.DataSet> parsed = new LinkedHashMap<>(4, 0.75f, true);
     static final Object LOAD = new Object();
-    static final ExecutorService EX = Executors.newSingleThreadExecutor();
-    static final ExecutorService THUMB = Executors.newSingleThreadExecutor();
+    /** Background threads that never keep the process alive on their own. */
+    static java.util.concurrent.ThreadFactory daemon(final String name) {
+        return new java.util.concurrent.ThreadFactory() {
+            public Thread newThread(Runnable r) { Thread t = new Thread(r, name); t.setDaemon(true); return t; }
+        };
+    }
+
+    static final ExecutorService EX = Executors.newSingleThreadExecutor(daemon("insula-prefetch"));
+    static final ExecutorService THUMB = Executors.newSingleThreadExecutor(daemon("insula-thumbs"));
     static volatile int gen;
     static final Map<String, Bitmap> thumbs = Collections.synchronizedMap(new HashMap<String, Bitmap>());
 

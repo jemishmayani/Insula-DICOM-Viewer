@@ -7,12 +7,18 @@ on:
   pull_request:
   workflow_dispatch:
 
+# A newer push cancels an older run of the same branch.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write   # needed to attach APKs to releases on version tags
 
 jobs:
   build:
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     env:
       HAS_RELEASE_KEY: ${{ secrets.INSULA_KEYSTORE_BASE64 != '' }}
     steps:

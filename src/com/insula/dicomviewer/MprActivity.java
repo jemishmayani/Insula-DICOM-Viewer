@@ -40,7 +40,7 @@ public class MprActivity extends BaseActivity implements DicomView.Listener, Dic
     static final int CPR_COLOR = 0xFF4DD0E1, MAXPX = 512, CPR_PAGES = 41;
     static final String[] MODES = {"Thin", "MIP", "MinIP", "Average"};
     static final String[] R3 = {"MIP", "Bone", "Soft tissue", "Vessels"};
-    static final ExecutorService RENDER = Executors.newSingleThreadExecutor();
+    static final ExecutorService RENDER = Executors.newSingleThreadExecutor(Library.daemon("insula-render"));
 
     Library.Series series;
     Volume vol;

@@ -11,7 +11,7 @@ import java.util.concurrent.Executors;
  * Voxel (i,j,k) maps to patient point O + i*A + j*B + k*C, which also handles gantry tilt and anisotropic voxels.
  */
 final class Volume {
-    static final ExecutorService POOL = Executors.newFixedThreadPool(Math.max(2, Runtime.getRuntime().availableProcessors()));
+    static final ExecutorService POOL = Executors.newFixedThreadPool(Math.max(2, Runtime.getRuntime().availableProcessors()), Library.daemon("insula-volume"));
 
     final short[] d;
     final int nx, ny, nz;

@@ -67,7 +67,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-output
-          path: tests/.work/*.png
+          # MPR renders, plus 3D comparison images (CPU left, GPU shader right), written only when the shader ran
+          path: |
+            tests/.work/*.png
+            tests/.work/vrt/compare_*.png
           if-no-files-found: ignore
 
       - name: Attach APK to release

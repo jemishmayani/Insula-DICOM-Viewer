@@ -13,6 +13,7 @@ def main():
         ctx = moderngl.create_standalone_context(backend="egl")
     except Exception as e:
         print("SKIP GPU shader check: no OpenGL context available (%s)" % e)
+        open(os.path.join(d, "gpu_result.txt"), "w").write("SKIPPED: %s\n" % e)
         return 0
     print("     GPU:", ctx.info["GL_RENDERER"])
     meta = json.load(open(os.path.join(d, "meta.json")))
@@ -28,6 +29,7 @@ def main():
     quad = ctx.buffer(np.array([-1, -1, 1, -1, -1, 1, 1, 1], dtype="f4").tobytes())
     vao = ctx.vertex_array(prog, [(quad, "2f", "aPos")])
     fails = 0
+    report = ["RAN on %s (%s)" % (ctx.info["GL_RENDERER"], ctx.info["GL_VERSION"])]
     for c in meta["cases"]:
         w, h = c["w"], c["h"]
         tf = ctx.texture((256, 8), 4, open(os.path.join(d, c["tf"]), "rb").read(), dtype="f1")
@@ -53,13 +55,16 @@ def main():
         lim_mean, lim_big = (3.0, 4.0) if c["mode"] == 3 else (2.0, 3.0)
         ok = mean < lim_mean and big < lim_big and gpu.max() > 0
         if not ok: fails += 1
-        print("%s GPU shader matches CPU reference: %-14s mean diff %.2f/255, %.2f%% of pixels differ by >16" % ("PASS" if ok else "FAIL", c["name"], mean, big))
+        line = "%s GPU shader matches CPU reference: %-14s mean diff %.2f/255, %.2f%% of pixels differ by >16" % ("PASS" if ok else "FAIL", c["name"], mean, big)
+        print(line)
+        report.append(line)
         try:
             from PIL import Image
             Image.fromarray(np.concatenate([cpu, gpu], axis=1).astype(np.uint8)).save(os.path.join(d, "compare_%s.png" % c["name"]))
         except Exception:
             pass
     print("ALL PASSED" if fails == 0 else "%d FAILED" % fails)
+    open(os.path.join(d, "gpu_result.txt"), "w").write("\n".join(report) + "\n")
     return 1 if fails else 0
 
 if __name__ == "__main__":

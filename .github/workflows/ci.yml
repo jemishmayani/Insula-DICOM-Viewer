@@ -71,6 +71,7 @@ jobs:
           path: |
             tests/.work/*.png
             tests/.work/vrt/compare_*.png
+            tests/.work/vrt/gpu_result.txt
           if-no-files-found: ignore
 
       - name: Attach APK to release

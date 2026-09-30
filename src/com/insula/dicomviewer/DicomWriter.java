@@ -62,6 +62,25 @@ final class DicomWriter {
         str(tag, "DS", sb.toString());
     }
 
+    /** Any element with raw bytes (padded to even length), for example private OB data. */
+    void bytes(int tag, String vr, byte[] v) {
+        byte[] b = v.length % 2 == 0 ? v : java.util.Arrays.copyOf(v, v.length + 1);
+        els.put(tag & 0xFFFFFFFFL, element(tag, vr, b));
+    }
+
+    /** 8-bit RGB pixels (interleaved), from ARGB ints, with the matching image pixel attributes. */
+    void pixelsRGB(int[] argb, int w, int h) {
+        byte[] b = new byte[argb.length * 3];
+        for (int i = 0; i < argb.length; i++) { int p = argb[i]; b[3 * i] = (byte) (p >> 16); b[3 * i + 1] = (byte) (p >> 8); b[3 * i + 2] = (byte) p; }
+        us(0x00280002, 3);
+        str(0x00280004, "CS", "RGB");
+        us(0x00280006, 0);
+        us(0x00280010, h);
+        us(0x00280011, w);
+        us(0x00280100, 8); us(0x00280101, 8); us(0x00280102, 7); us(0x00280103, 0);
+        els.put(Dicom.PIXEL_DATA & 0xFFFFFFFFL, element(Dicom.PIXEL_DATA, "OB", b.length % 2 == 0 ? b : java.util.Arrays.copyOf(b, b.length + 1)));
+    }
+
     void pixels16(short[] px) {
         byte[] b = new byte[px.length * 2];
         for (int i = 0; i < px.length; i++) { b[2 * i] = (byte) px[i]; b[2 * i + 1] = (byte) (px[i] >> 8); }

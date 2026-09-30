@@ -1,6 +1,6 @@
 # Google Play and Android compliance review
 
-*Insula DICOM Viewer 1.7.0. Reviewed 30 September 2026 against Android 16 (API 36) and Android 17 (API 37, the current release since June 2026).*
+*Insula DICOM Viewer 1.8.0. Reviewed 30 September 2026 against Android 16 (API 36) and Android 17 (API 37, the current release since June 2026).*
 
 ## Summary
 
@@ -13,6 +13,7 @@
 | Large screens (orientation and resizability limits ignored at 36) | **Compatible**: no orientation or aspect-ratio locks; layouts adapt |
 | 16 KB memory page size | **Not applicable**: no native code |
 | Permissions | Internet only |
+| Hardware features | OpenGL ES 2.0 required (all phones); OpenGL ES 3.0 used when present for 3D VRT, with a CPU fallback, so it isn't a store filter |
 | Android App Bundle (.aab) for Play uploads | **To do** |
 | Play Console: App Signing, health apps declaration, data safety, privacy policy URL | **To do** (answers prepared in [RELEASING.md](RELEASING.md)) |
 | Target API 37 (expected to be required from August 2027) | Planned; see "Android 17 readiness" |

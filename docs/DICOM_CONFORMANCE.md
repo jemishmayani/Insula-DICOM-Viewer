@@ -1,6 +1,6 @@
 # DICOM conformance statement
 
-*Insula DICOM Viewer 1.7.0 for Android. Last updated 29 September 2026.*
+*Insula DICOM Viewer 1.8.0 for Android. Last updated 29 September 2026.*
 
 This statement follows the spirit of DICOM PS3.2. It describes which DICOM objects, encodings, and services Insula supports.
 
@@ -116,6 +116,16 @@ If a profile's address is not a DICOMweb root, Test connection tries common root
 | Pixel data | 16-bit signed (Bits Stored 16), MONOCHROME2, Rescale Slope 1, Intercept 0 (values already in modality units; Rescale Type HU for CT), Window Center/Width from the view |
 
 Saved series are stored in the local library as part of the same study. Insula does not send them to a PACS.
+
+### 4.1 3D VRT sessions and captures
+
+| Object | SOP Class | Series | Content |
+|---|---|---|---|
+| Saved session | Raw Data Storage (1.2.840.10008.5.1.4.1.1.66) | "Insula 3D VRT states", Series Number 9901, one series per study (UID derived from the Study Instance UID) | Private creator (0071,0010) = `INSULA_VRT`; (0071,1001) OB: session settings as UTF-8 JSON; (0071,1002) OB: tissue map, one byte per voxel, deflate-compressed; (0071,1003) LO: Series Instance UID of the source series |
+| Capture | Secondary Capture Image Storage (1.2.840.10008.5.1.4.1.1.7) | "Insula 3D VRT captures", Series Number 9902 | 8-bit RGB, Conversion Type WSD, Image Type DERIVED\\SECONDARY\\VOLUME_RENDERING, Burned In Annotation NO |
+| Rotation series | Secondary Capture Image Storage | "3D VRT rotation (36 views)", Series Number 9903, new UID each time | 36 RGB images 10° apart |
+
+All copy the patient and study attributes of the source series, with Content Date and Time of creation, so they file into the same study. Other viewers ignore the private session data and display the captures normally. Anonymized export keeps the `INSULA_VRT` private block (settings and a tissue map, no patient data) and still blanks all other private elements.
 
 **Demo study.** The optional demo creates two synthetic CT Image Storage studies (patient ID `INSULA-DEMO`, institution "Insula demo (synthetic data)") with fixed UIDs under `2.25.3301…`, so creating it again adds no duplicates.
 

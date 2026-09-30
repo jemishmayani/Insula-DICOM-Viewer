@@ -33,6 +33,11 @@ A fast, private DICOM viewer for Android phones and tablets: open studies from f
 - Study cards with patient, age/sex, description, source institution, date, size, and modality
 - Search, sort, albums (teaching files, follow-ups), and a transfer log with sizes, speeds, and errors
 
+**3D VRT**
+- GPU volume rendering (OpenGL ES 3.0) with automatic tissue separation for contrast CT: bone, vessels and chambers, calcium, soft tissue, lungs, skin
+- Manual refinement: per-tissue colour, opacity, and range; pick, cut, clip, undo; presets; VRT, MIP, MinIP, Surface
+- Sessions and captures saved into the study as DICOM; 36-view rotation series; quality chosen for the phone, with a CPU mode for older phones
+
 **Viewer**
 - Smooth scrolling (background decoding, direction-aware prefetch), flick to glide, a scrub bar, and long-press presets
 - One-tap quick bar; side-by-side comparison with prior studies and linked scrolling across studies

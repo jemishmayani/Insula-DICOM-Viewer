@@ -4,3 +4,4 @@ numpy==2.4.4
 pylibjpeg==2.1.0
 pylibjpeg-libjpeg==2.4.0
 pylibjpeg-openjpeg==2.6.0
+moderngl==5.12.0   # runs the GPU ray-casting shader on Mesa for the 3D VRT check

@@ -166,6 +166,7 @@ public final class Library {
         Series(ImageInfo i, Study s) { uid = i.seriesUid; desc = i.seriesDesc; modality = i.modality; number = i.seriesNumber; bodyPart = i.bodyPart; study = s; }
         synchronized void add(ImageInfo i) { images.add(i); slices = null; }
         public synchronized List<SliceRef> slices() { if (slices == null) slices = build(); return slices; }
+        synchronized void invalidate() { slices = null; }
         public String label() { return "Series " + number + (desc.isEmpty() ? "" : ": " + desc); }
         public synchronized ImageInfo first() { return images.isEmpty() ? null : images.get(0); }
 
@@ -394,6 +395,23 @@ public final class Library {
         se.study.series.remove(se);
         if (se.study.series.isEmpty()) { studies.remove(se.study); studyMap.remove(se.study.uid); }
         thumbs.remove(se.uid);
+        clearCache();
+    }
+
+    /** Deletes one object, for example a saved 3D state; its series and study go too if they become empty. */
+    public static synchronized void deleteImage(ImageInfo i) {
+        i.file.delete();
+        bySop.remove(i.sopUid);
+        AnnStore.removeSop(i.sopUid);
+        for (Study st : new ArrayList<>(studies)) for (Series se : new ArrayList<>(st.series)) {
+            if (!se.images.remove(i)) continue;
+            se.invalidate();
+            if (se.images.isEmpty()) {
+                seriesMap.remove(se.uid);
+                st.series.remove(se);
+                if (st.series.isEmpty()) { studies.remove(st); studyMap.remove(st.uid); }
+            }
+        }
         clearCache();
     }
 

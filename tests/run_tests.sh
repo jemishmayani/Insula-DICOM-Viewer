@@ -72,6 +72,9 @@ step "DICOM writer (saved MPR series)" writer
 step "Backup, annotations, study sets" backup
 step "Smooth viewing (windowing, previews, loading)" $JAVA -Dwork="$WORK" -cp "$CP" com.insula.dicomviewer.SmoothViewingTest
 step "Demo study, comparison, parallel MPR build" $JAVA -Dwork="$WORK" -cp "$CP" com.insula.dicomviewer.DemoCompareTest
+step "3D VRT: tissue separation, edits, sessions" $JAVA -Dwork="$WORK" -cp "$CP" com.insula.dicomviewer.VrtTest
+step "3D VRT: GPU shader matches CPU renderer" python3 "$T/python/vrt_gpu_check.py" "$WORK/vrt" res/raw
+step "3D VRT: states and captures saved in the study" $JAVA -Dwork="$WORK" -cp "$CP" com.insula.dicomviewer.VrtStoreTest
 step "Update checker (version compare, release parsing)" $JAVA -cp "$CP" com.insula.dicomviewer.UpdateCheckTest
 step "PACS: two institutions, password and token" with_server $T/python/mock_two_hospitals.py com.insula.dicomviewer.PacsProfilesTest
 step "PACS: HTTP 406 recovery and path discovery" with_server $T/python/mock_406_portal.py com.insula.dicomviewer.Pacs406Test

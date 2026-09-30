@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.8.0
+- **3D VRT**, a separate mode (quick bar › 3D, a thumbnail's long-press menu, or MPR › Open in 3D VRT):
+  - GPU ray casting with OpenGL ES 3.0 (volume as a half-float 3D texture, tissue classes as a label texture, per-class transfer functions), rendered at reduced resolution while dragging and sharpened on release
+  - Automatic tissue separation for CT with thresholds measured from each scan: skin and fat, organs and soft tissue, vessels and heart chambers, bone, lungs, calcium, plus a Selection class. Bone is cortical bone plus what it encloses in cross-section, so vessels touching bone stay vessels; compact dense spots are calcium. MR and other scans use intensity bands
+  - Manual refinement: per-class visibility, colour, opacity, and density range; rerun separation with your own thresholds; Pick (hide, show only, or move a structure to another class); Cut (remove, keep, or reclassify inside a drawn outline, through the full depth); clip box; undo
+  - Presets (coronary CTA, vessels, bones, all tissues, lungs, vessel MIP, skin), VRT/MIP/MinIP/Surface modes, lighting, background, standard views, spin, orientation letters
+  - Captures: save or share a PNG, add the image to the study (Secondary Capture), or add a 36-view rotation series
+  - Sessions saved inside the study as DICOM (series "Insula 3D VRT states"), including the edited tissue map, so work continues across sessions and travels with study-set exports. Anonymized exports keep the session block
+  - Quality tiers chosen from the phone's memory and graphics (High, Standard, Low, and Basic CPU mode for phones without OpenGL ES 3.0), with automatic fallback if the GPU runs out of memory, and in-app instructions
+- Tests: tissue separation on a synthetic coronary CTA phantom (bone, vessels, lungs, soft tissue, aorta touching the spine, coronary with calcified plaque), edits and undo, session round trip, and the GPU shader compared pixel by pixel with the CPU renderer on Mesa
+
 ## 1.7.0
 - **Smoother scrolling:** slices are decoded in the background, so the screen never waits. Several slices decode in parallel, and prefetching reads ahead in the scrolling direction (the whole series when it fits in memory)
 - **Faster window/level:** redraws at most once per frame, spread across CPU cores, with a reduced preview while dragging on very large images

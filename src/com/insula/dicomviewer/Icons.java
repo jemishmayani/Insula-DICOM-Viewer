@@ -45,6 +45,12 @@ public final class Icons extends Drawable {
             case "search": c.drawCircle(10.5f, 10.5f, 6.5f, p); line(c, 15.5f, 15.5f, 21, 21); break;
             case "plus": p.setStrokeWidth(2.2f); line(c, 12, 5, 12, 19); line(c, 5, 12, 19, 12); break;
             case "chevron": open(c, 6, 9, 12, 15, 18, 9); break;
+            case "scissors": c.drawCircle(6.5f, 17.5f, 3, p); c.drawCircle(17.5f, 17.5f, 3, p); line(c, 8.6f, 15.4f, 18, 4); line(c, 15.4f, 15.4f, 6, 4); break;
+            case "camera": c.drawRoundRect(new RectF(2.5f, 7, 21.5f, 19.5f), 2.5f, 2.5f, p); open(c, 8, 7, 9.5f, 4.5f, 14.5f, 4.5f, 16, 7); c.drawCircle(12, 13, 3.6f, p); break;
+            case "save": c.drawRoundRect(new RectF(3.5f, 3.5f, 20.5f, 20.5f), 2, 2, p); open(c, 7.5f, 3.5f, 7.5f, 9, 15.5f, 9, 15.5f, 3.5f); c.drawRoundRect(new RectF(7, 13.5f, 17, 20.5f), 1, 1, p); break;
+            case "crop": open(c, 6, 2.5f, 6, 18, 21.5f, 18); open(c, 2.5f, 6, 18, 6, 18, 21.5f); break;
+            case "tissue": c.drawCircle(8.5f, 9, 5, p); c.drawCircle(15.5f, 9, 5, p); c.drawCircle(12, 15, 5, p); break;
+            case "orbit": c.drawOval(new RectF(2.5f, 8, 21.5f, 16), p); fill(); c.drawCircle(12, 12, 2.6f, p); c.drawCircle(19.5f, 10.4f, 1.6f, p); break;
             case "play": fill(); closed(c, 7, 4.5f, 19.5f, 12, 7, 19.5f); break;
             case "pause": fill(); c.drawRoundRect(new RectF(6, 5, 10, 19), 1, 1, p); c.drawRoundRect(new RectF(14, 5, 18, 19), 1, 1, p); break;
             case "compare": c.drawRoundRect(new RectF(2.5f, 5, 11, 19), 1.5f, 1.5f, p); c.drawRoundRect(new RectF(13, 5, 21.5f, 19), 1.5f, 1.5f, p); line(c, 5.5f, 12, 8, 12); line(c, 16, 12, 18.5f, 12); break;

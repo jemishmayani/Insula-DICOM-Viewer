@@ -317,6 +317,9 @@ public class MprActivity extends BaseActivity implements DicomView.Listener, Dic
         Ui.actionRow(this, c, "pencil", "Curved MPR: draw a path", new View.OnClickListener() { public void onClick(View v) { drawer.close(); selectTool(DicomView.T_CURVE); } });
         Ui.actionRow(this, c, "close", "Clear curve", new View.OnClickListener() { public void onClick(View v) { drawer.close(); clearCurve(); } });
         Ui.actionRow(this, c, "download", "Save planes as a new series", new View.OnClickListener() { public void onClick(View v) { drawer.close(); saveSeriesDialog(); } });
+        Ui.actionRow(this, c, "orbit", "Open in 3D VRT", new View.OnClickListener() {
+            public void onClick(View v) { drawer.close(); startActivity(new android.content.Intent(MprActivity.this, VrtActivity.class).putExtra(VrtActivity.EXTRA_SERIES, series.uid)); }
+        });
         Ui.actionRow(this, c, "help", "How MPR works here", new View.OnClickListener() { public void onClick(View v) { drawer.close(); help(); } });
         Ui.actionRow(this, c, "book", "Guide to every tool", new View.OnClickListener() { public void onClick(View v) { drawer.close(); startActivity(new android.content.Intent(MprActivity.this, GuideActivity.class)); } });
 

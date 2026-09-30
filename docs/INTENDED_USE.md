@@ -1,6 +1,6 @@
 # Intended use and limitations
 
-*Applies to Insula DICOM Viewer 1.7.0. Last updated 29 September 2026.*
+*Applies to Insula DICOM Viewer 1.8.0. Last updated 29 September 2026.*
 
 ## Product description
 
@@ -42,6 +42,7 @@ Healthcare professionals, medical students and educators, and patients viewing t
 | Reconstructions | MPR, MIP, curved MPR, and 3D are interpolated from the acquired slices. Uneven slice spacing, large gaps, or motion reduce accuracy; the app warns about uneven spacing. Very large series are reduced in resolution to fit in memory, and the app says so. |
 | Overlays | DICOM overlay planes (60xx), segmentation objects, and structured-report rendering are not displayed. Reports can be read in the DICOM tag browser. |
 | Anonymization | Anonymized export blanks common identifying attributes and all private tags, keeps UIDs and study dates, and does not remove text burned into image pixels. It is not a complete implementation of the DICOM PS3.15 de-identification profiles. Always check exported images. |
+| 3D VRT | Automatic tissue separation is rule-based (thresholds and connectivity), not a validated segmentation. It separates tissue types, not organs, and can mislabel structures such as dense contrast in veins, streak artefacts, or unusual anatomy. 3D volumes are resampled (down to about 160–320 voxels on the longest side, depending on the phone), so fine detail is reduced. Renderings are for orientation and communication; measure and assess on the source images. |
 | Network | PACS access uses DICOMweb only (QIDO-RS, WADO-RS). Traditional DICOM networking (C-FIND, C-MOVE, C-STORE) is not supported. |
 
 ## Warnings shown to users

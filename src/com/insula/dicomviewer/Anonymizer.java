@@ -16,7 +16,7 @@ import java.util.zip.ZipOutputStream;
 
 /**
  * Blanks identifying attributes in place (same lengths, so any transfer syntax except deflated works without re-encoding).
- * Also scrubs nested sequences and all private tags. UIDs and study dates are kept so series still load together.
+ * Also scrubs nested sequences and all private tags, except Insula's own 3D state block (view settings only). UIDs and study dates are kept so series still load together.
  */
 public final class Anonymizer {
     static final Map<Integer, String> PHI = new HashMap<>();
@@ -80,10 +80,25 @@ public final class Anonymizer {
             if (e.fragments != null || e.length <= 0) continue;
             int g = e.tag >>> 16;
             if (g == 0x0002) continue;
-            if ((g & 1) == 1) { fill(ds.buf, e, "", (byte) 0); continue; }
+            if ((g & 1) == 1) {
+                // Insula's own 3D state block holds only view settings and a tissue map (no patient data); keep it.
+                if (insulaBlock(ds, e.tag)) continue;
+                fill(ds.buf, e, "", (byte) 0);
+                continue;
+            }
             String r = PHI.get(e.tag);
             if (r != null) fill(ds.buf, e, r, (byte) ' ');
         }
+    }
+
+    /** True for the private creator element "INSULA_VRT" and the elements in its block. */
+    static boolean insulaBlock(Dicom.DataSet ds, int tag) {
+        int g = tag >>> 16, el = tag & 0xFFFF;
+        int creatorTag = el <= 0x00FF ? tag : (g << 16) | (el >> 8);
+        Dicom.Element c = ds.get(creatorTag);
+        if (c == null || c.length <= 0) return false;
+        String v = new String(ds.buf, c.offset, c.length, Dicom.LATIN1).trim();
+        return VrtStore.CREATOR.equals(v);
     }
 
     static void fill(byte[] b, Dicom.Element e, String val, byte pad) {

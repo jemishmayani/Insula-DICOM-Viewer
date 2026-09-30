@@ -1,6 +1,6 @@
 # Verification and validation report
 
-*Insula DICOM Viewer 1.7.0. Last updated 29 September 2026.*
+*Insula DICOM Viewer 1.8.0. Last updated 29 September 2026.*
 
 This report summarizes automated **software verification**: whether the software does what it was designed to do. It is **not clinical validation**, and it does not establish fitness for diagnostic use (see [INTENDED_USE.md](INTENDED_USE.md)).
 
@@ -85,13 +85,42 @@ Mock servers stand in for real PACS; no real hospital system was used.
 
 **Result: pass.**
 
-## 6. Not yet verified
+## 6. 3D VRT
+
+**Tissue separation** is tested on a synthetic coronary CTA phantom (160 × 140 × 120 voxels at 1 mm, noise σ 12 HU) with known truth: body with fat and muscle, lungs reaching the top of the scan, heart with a contrast-filled chamber, ascending and descending aortas, a coronary artery with a calcified plaque, spine (cortical shell with trabecular bone in the contrast density range), ribs, and sternum. The descending aorta touches the spine through a partial-volume contact along its whole length, the case that defeats simple connectivity-based bone removal.
+
+| Check | Result |
+|---|---|
+| Contrast detected; vessel threshold between soft tissue and blood pool | 130 HU (blood pool 383, soft tissue 43) |
+| Bone, vessels and chambers, lungs, soft tissue, skin and fat labelled correctly | 100% each |
+| Aorta touching the spine labelled bone | 0% |
+| Spine touching the aorta labelled vessel | 0% |
+| Thin coronary artery kept as vessel | 100% |
+| Coronary calcification labelled calcium | 100% |
+
+A phantom is cleaner than patients: these results show the method handles those specific hard cases, not that real scans will be separated perfectly. The first version of the method failed three of these checks (lungs reached from the top face, aorta merged with spine through a broad contact, and fat at the threshold); the method was changed accordingly.
+
+**Editing and sessions:** picking a connected structure, moving it between classes, hiding it, and undo (bit-exact restoration); scalpel cuts select the correct side of the volume; sessions round-trip camera, classes, clipping, and parameters; saved tissue maps reopen exactly (239 KB for 10 million voxels), open at other quality levels, and survive anonymized export; captures reopen pixel-exact as DICOM.
+
+**GPU shader.** The phone's GLSL ES 3.00 shader (`res/raw/vrt_frag.glsl`) is run on Mesa's llvmpipe OpenGL implementation and compared pixel by pixel with the Java renderer, which implements the same algorithm and is the fallback on phones without OpenGL ES 3.0:
+
+| Scene | Mean difference (0–255) | Pixels differing by > 16 |
+|---|---|---|
+| VRT, front | 0.68 | 0.61% |
+| VRT, oblique | 0.51 | 0.00% |
+| MIP, front | 0.00 | 0.00% |
+| Surface, left | 2.05 | 2.21% (edge pixels at the hard surface threshold) |
+| VRT, clipped | 0.42 | 0.14% |
+
+## 7. Not yet verified
 
 - Behaviour on physical devices across Android versions, screen sizes, and vendors (manual testing so far)
 - Touch-gesture usability
 - Interoperability with specific commercial PACS products
 - Rendering of JPEG Baseline through Android's BitmapFactory (device-only)
 - Performance on low-memory phones with very large series
+- 3D VRT on physical GPUs (Adreno, Mali, PowerVR): shader precision, memory limits, and frame rates. The shader is verified on Mesa only
+- Tissue separation on real patient scans
 
 ## Reproducing
 

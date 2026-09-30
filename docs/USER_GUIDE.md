@@ -1,12 +1,12 @@
 # User guide
 
-*Insula DICOM Viewer 1.7.0*
+*Insula DICOM Viewer 1.8.0*
 
 The same information is in the app under **Settings › Guide**, with search. Long-press any icon in the app to see its name.
 
 > Insula is for reference, teaching, and patient use, not primary diagnosis. See [Intended use](INTENDED_USE.md).
 
-**Contents:** [Getting started](#1-getting-started) · [Home screen](#2-home-screen) · [Viewer](#3-viewer) · [Measuring and annotating](#4-measuring-and-annotating) · [MPR and 3D](#5-mpr-and-3d) · [PACS](#6-pacs-dicomweb) · [Sharing and privacy](#7-sharing-and-privacy) · [Settings and backup](#8-settings-and-backup) · [Troubleshooting](#9-troubleshooting)
+**Contents:** [Getting started](#1-getting-started) · [Home screen](#2-home-screen) · [Viewer](#3-viewer) · [Measuring and annotating](#4-measuring-and-annotating) · [MPR and 3D](#5-mpr-and-3d) · [3D VRT](#3d-vrt) · [PACS](#6-pacs-dicomweb) · [Sharing and privacy](#7-sharing-and-privacy) · [Settings and backup](#8-settings-and-backup) · [Troubleshooting](#9-troubleshooting)
 
 ---
 
@@ -143,6 +143,43 @@ Open from the viewer's Tools menu (**MPR (3 planes)**) or by long-pressing a thu
 **Menu:** layout (4 views, 3 planes, single); slab mode (Thin, MIP, MinIP, Average) and thickness (2–80 mm); 3D mode (MIP, Bone, Soft tissue, Vessels); crosshair lines; linked window; presets; clear curve; **Save planes as a new series**; and **Reset orientation**.
 
 **Saving reformats:** choose a plane and a spacing (1, 2, 3, or 5 mm). The whole volume is reformatted with the current slab settings and stored as a DICOM series in the same study.
+
+### 3D VRT
+
+A separate mode for volume rendering with tissue separation, like the 3D tools on CT consoles. Open it with **3D** in the viewer's quick bar, **3D VRT** in a thumbnail's long-press menu, or **Open in 3D VRT** in MPR. The series needs at least 10 slices.
+
+**What happens when it opens.** The series is resampled into a 3D volume, and contrast CT is separated automatically into tissue classes: skin and fat, organs and soft tissue, vessels and heart chambers, bone, lungs, and calcium (plus an empty Selection class for your own groupings). Thresholds come from the scan's own histogram; a message shows what was detected, for example the blood-pool density. Bone is identified by its dense outer layer and what that layer encloses, so an aorta pressed against the spine stays a vessel. MR and other scans use simple intensity bands.
+
+**Check the result.** Automatic separation distinguishes tissue types, not individual organs, and can mislabel structures, for example veins with undiluted contrast (which can look like bone) or unusual anatomy. Correct it with the tools below.
+
+| Tool | Use |
+|---|---|
+| Drag / pinch / two fingers / double-tap | Rotate / zoom / move / front view |
+| Presets | Coronary CTA, vessels only, bones, all tissues, lungs and airways, vessel MIP, skin surface |
+| Tissues | Per class: show or hide, colour (tap the swatch), opacity, and density range. Rerun the automatic separation with your own vessel and bone thresholds |
+| Pick | Tap a structure: hide it, show only it, or move it to another class |
+| Cut | Draw an outline: remove inside, keep only inside, or move visible tissue inside to a class. It cuts through the full depth from the current direction |
+| Clip | Remove slabs from each side |
+| Views, Spin | Standard directions; continuous rotation |
+| Display | VRT, MIP, MinIP, or Surface; MIP window; lighting; background; quality |
+| Undo | Steps back through picks and cuts |
+
+**Example: coronary arteries.** Choose the Coronary CTA preset. Pick the heart chambers (in Vessels) and choose Hide this structure, or Move to Selection and hide Selection in Tissues. Cut away ribs or sternum if they block the view, then rotate.
+
+**Saving and continuing.** The save icon opens **Sessions**. A saved session stores the view settings and your edited tissue map inside the study, as the series "Insula 3D VRT states", so it's included in study-set exports (including anonymized ones) and can be reopened later. When you open 3D on a series with saved sessions, Insula offers to continue one.
+
+**Captures.** The camera icon saves or shares a PNG, adds the image to the study as a DICOM image ("Insula 3D VRT captures"), or adds a **36-view rotation series** you can scroll in the viewer.
+
+**Quality and limited mode.** Insula chooses a quality level for your phone, shown at the top left of the 3D view:
+
+| Level | When | Effect |
+|---|---|---|
+| High | GPU, lots of memory, 6+ cores | Up to 320 voxels on the longest side |
+| Standard | GPU, typical phones | About 256 voxels |
+| Low | Low-memory phones | About 192 voxels; small vessels are softer |
+| Basic (CPU) | No OpenGL ES 3.0 | Drawn by the processor at reduced resolution: rotation is slow and the image sharpens after you let go |
+
+If the GPU runs out of memory, Insula drops a level automatically. You can choose a level in Display › Quality; higher than recommended may be slow or fail.
 
 ## 6. PACS (DICOMweb)
 

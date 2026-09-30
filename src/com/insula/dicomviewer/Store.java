@@ -221,4 +221,34 @@ final class Store {
     static String source(Context c, String studyUid) {
         try { return new JSONObject(sp(c).getString("sources", "{}")).optString(studyUid, ""); } catch (Exception e) { return ""; }
     }
+
+    // ---- Remembered window settings, per series ----
+    static synchronized void saveWindow(Context c, String seriesUid, double wc, double ww) {
+        try {
+            JSONObject o = new JSONObject(sp(c).getString("wl", "{}"));
+            o.remove(seriesUid);
+            JSONObject n = new JSONObject();
+            Iterator<String> it = o.keys();
+            int skip = Math.max(0, o.length() - 399);
+            while (it.hasNext()) { String k = it.next(); if (skip > 0) { skip--; continue; } n.put(k, o.get(k)); }
+            n.put(seriesUid, new JSONArray(new double[]{wc, ww}));
+            sp(c).edit().putString("wl", n.toString()).apply();
+        } catch (Exception ignored) { }
+    }
+
+    static synchronized double[] loadWindow(Context c, String seriesUid) {
+        try {
+            JSONArray a = new JSONObject(sp(c).getString("wl", "{}")).optJSONArray(seriesUid);
+            if (a == null || a.length() < 2) return null;
+            return new double[]{a.getDouble(0), a.getDouble(1)};
+        } catch (Exception e) { return null; }
+    }
+
+    static synchronized void clearWindow(Context c, String seriesUid) {
+        try {
+            JSONObject o = new JSONObject(sp(c).getString("wl", "{}"));
+            o.remove(seriesUid);
+            sp(c).edit().putString("wl", o.toString()).apply();
+        } catch (Exception ignored) { }
+    }
 }

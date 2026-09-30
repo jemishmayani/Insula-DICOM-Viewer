@@ -411,7 +411,8 @@ public final class Library {
     static final LinkedHashMap<String, RawImage> cache = new LinkedHashMap<>(64, 0.75f, true);
     static long cacheBytes, maxCache = 64L * 1024 * 1024;
     static final LinkedHashMap<String, Dicom.DataSet> parsed = new LinkedHashMap<>(4, 0.75f, true);
-    static final Object LOAD = new Object();
+    static final java.util.concurrent.ConcurrentHashMap<String, Object> LOCKS = new java.util.concurrent.ConcurrentHashMap<>();
+
     /** Background threads that never keep the process alive on their own. */
     static java.util.concurrent.ThreadFactory daemon(final String name) {
         return new java.util.concurrent.ThreadFactory() {
@@ -419,72 +420,130 @@ public final class Library {
         };
     }
 
-    static final ExecutorService EX = Executors.newSingleThreadExecutor(daemon("insula-prefetch"));
+    static final int PREFETCH_THREADS = Math.max(1, Math.min(3, Runtime.getRuntime().availableProcessors() - 1));
+    static final ExecutorService EX = Executors.newFixedThreadPool(PREFETCH_THREADS, daemon("insula-prefetch"));
+    /** Decodes the slice the user is waiting for, ahead of any prefetching. */
+    static final ExecutorService UI_DECODE = Executors.newSingleThreadExecutor(daemon("insula-decode"));
     static final ExecutorService THUMB = Executors.newSingleThreadExecutor(daemon("insula-thumbs"));
     static volatile int gen;
     static final Map<String, Bitmap> thumbs = Collections.synchronizedMap(new HashMap<String, Bitmap>());
 
     public static void clearCache() {
         synchronized (cache) { cache.clear(); cacheBytes = 0; }
-        synchronized (LOAD) { parsed.clear(); }
+        synchronized (parsed) { parsed.clear(); }
     }
 
+    static String key(SliceRef s) { return s.info.file.getAbsolutePath() + "#" + s.frame; }
+
+    static Object lockFor(String k) {
+        Object n = new Object(), e = LOCKS.putIfAbsent(k, n);
+        return e != null ? e : n;
+    }
+
+    /** Parsed files, kept briefly so multi-frame files aren't re-read for every frame. */
     public static Dicom.DataSet parsedFile(File f) throws Exception {
-        synchronized (LOAD) {
-            Dicom.DataSet ds = parsed.get(f.getAbsolutePath());
-            if (ds == null) {
-                ds = Dicom.parse(readFile(f));
-                parsed.put(f.getAbsolutePath(), ds);
-                while (parsed.size() > 2) { String k = parsed.keySet().iterator().next(); parsed.remove(k); }
-            }
-            return ds;
-        }
-    }
-
-    public static RawImage load(SliceRef s) throws Exception {
-        String k = s.info.file.getAbsolutePath() + "#" + s.frame;
-        synchronized (cache) { RawImage c = cache.get(k); if (c != null) return c; }
-        synchronized (LOAD) {
-            synchronized (cache) { RawImage c = cache.get(k); if (c != null) return c; }
-            RawImage r;
-            try {
-                Dicom.DataSet ds = parsedFile(s.info.file);
-                r = PixelDecoder.decode(ds, s.frame);
-            } catch (OutOfMemoryError oom) {
-                clearCache();
-                throw new Exception("Not enough memory to decode this image.");
-            }
-            Geo g = s.geo();
-            r.slope = g.slope; r.intercept = g.intercept; r.rowSp = g.rowSp; r.colSp = g.colSp;
-            r.wc = g.wc; r.ww = g.ww;
-            r.units = "CT".equals(s.info.modality) ? "HU" : "";
-            r.computeRange();
-            synchronized (cache) {
-                cache.put(k, r);
-                cacheBytes += r.bytes();
-                while (cacheBytes > maxCache && cache.size() > 1) {
-                    String first = cache.keySet().iterator().next();
-                    RawImage old = cache.remove(first);
-                    if (old != null) cacheBytes -= old.bytes();
+        String p = f.getAbsolutePath();
+        synchronized (parsed) { Dicom.DataSet ds = parsed.get(p); if (ds != null) return ds; }
+        Object lock = lockFor("file:" + p);
+        try {
+            synchronized (lock) {
+                synchronized (parsed) { Dicom.DataSet ds = parsed.get(p); if (ds != null) return ds; }
+                Dicom.DataSet ds = Dicom.parse(readFile(f));
+                synchronized (parsed) {
+                    parsed.put(p, ds);
+                    while (parsed.size() > 3) { String k = parsed.keySet().iterator().next(); parsed.remove(k); }
                 }
+                return ds;
             }
-            return r;
-        }
+        } finally { LOCKS.remove("file:" + p, lock); }
     }
 
-    public static void prefetch(final List<SliceRef> list, final int center) {
-        final int g = ++gen;
-        EX.submit(new Runnable() {
-            public void run() {
-                for (int d = 1; d <= 4; d++) {
-                    for (int s : new int[]{center + d, center - d}) {
-                        if (gen != g) return;
-                        if (s >= 0 && s < list.size()) { try { load(list.get(s)); } catch (Throwable ignored) { } }
+    /** The decoded frame if it's already in memory, without blocking. */
+    public static RawImage peek(SliceRef s) {
+        synchronized (cache) { return cache.get(key(s)); }
+    }
+
+    /** Decodes a frame (or returns it from the cache). Different frames decode in parallel; the same frame only once. */
+    public static RawImage load(SliceRef s) throws Exception {
+        String k = key(s);
+        RawImage c = peek(s);
+        if (c != null) return c;
+        Object lock = lockFor(k);
+        try {
+            synchronized (lock) {
+                c = peek(s);
+                if (c != null) return c;
+                RawImage r;
+                try {
+                    Dicom.DataSet ds = s.info.frames > 1 ? parsedFile(s.info.file) : Dicom.parse(readFile(s.info.file));
+                    r = PixelDecoder.decode(ds, s.frame);
+                } catch (OutOfMemoryError oom) {
+                    clearCache();
+                    throw new Exception("Not enough memory to decode this image.");
+                }
+                Geo g = s.geo();
+                r.slope = g.slope; r.intercept = g.intercept; r.rowSp = g.rowSp; r.colSp = g.colSp;
+                r.wc = g.wc; r.ww = g.ww;
+                r.units = "CT".equals(s.info.modality) ? "HU" : "";
+                r.computeRange();
+                synchronized (cache) {
+                    cache.put(k, r);
+                    cacheBytes += r.bytes();
+                    while (cacheBytes > maxCache && cache.size() > 1) {
+                        String first = cache.keySet().iterator().next();
+                        RawImage old = cache.remove(first);
+                        if (old != null) cacheBytes -= old.bytes();
                     }
                 }
+                return r;
+            }
+        } finally { LOCKS.remove(k, lock); }
+    }
+
+    public interface Done { void done(RawImage r, Throwable err); }
+
+    /** Decodes on the dedicated decode thread and reports back (on that thread). */
+    public static void loadAsync(final SliceRef s, final Done cb) {
+        UI_DECODE.submit(new Runnable() {
+            public void run() {
+                RawImage r = null;
+                Throwable err = null;
+                try { r = load(s); } catch (Throwable t) { err = t; }
+                cb.done(r, err);
             }
         });
     }
+
+    /**
+     * Warms the cache around the current slice: first ahead in the scrolling direction, then behind, then (if the
+     * series fits comfortably in memory) the rest of the series, nearest first. A newer call cancels older work.
+     */
+    public static void prefetch(final List<SliceRef> list, final int center, final int dir) {
+        final int g = ++gen;
+        int n = list.size();
+        if (n <= 1) return;
+        SliceRef any = list.get(Math.min(center, n - 1));
+        long frame = Math.max(1, (long) Math.max(1, any.info.rows) * Math.max(1, any.info.cols) * 4 + 64);
+        int budget = (int) Math.max(8, Math.min(n, (maxCache * 6 / 10) / frame));
+        List<Integer> order = new ArrayList<>();
+        int ahead = Math.min(budget, 16), behind = Math.min(budget, 6), d = dir >= 0 ? 1 : -1;
+        for (int k = 1; k <= Math.max(ahead, behind); k++) {
+            if (k <= ahead) order.add(center + d * k);
+            if (k <= behind) order.add(center - d * k);
+        }
+        if (budget >= n) for (int k = ahead + 1; k < n; k++) { order.add(center + d * k); order.add(center - d * k); }
+        for (final int idx : order) {
+            if (idx < 0 || idx >= n) continue;
+            EX.submit(new Runnable() {
+                public void run() {
+                    if (gen != g) return;
+                    try { load(list.get(idx)); } catch (Throwable ignored) { }
+                }
+            });
+        }
+    }
+
+    public static void prefetch(List<SliceRef> list, int center) { prefetch(list, center, 1); }
 
     public interface ThumbCallback { void done(); }
 

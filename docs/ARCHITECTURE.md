@@ -1,6 +1,6 @@
 # Architecture
 
-*Insula DICOM Viewer 1.6.0*
+*Insula DICOM Viewer 1.7.0*
 
 Insula is a single-module Android app written in plain Java, with no Gradle and no third-party Android libraries. Its only bundled dependency is the JJ2000 JPEG 2000 decoder. All UI is built in code.
 

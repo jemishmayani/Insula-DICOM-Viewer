@@ -13,6 +13,7 @@ import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -35,22 +36,43 @@ public class GuideActivity extends BaseActivity {
             {"server", "PACS", "The server icon at the top. Search your hospitals' PACS and download studies (see PACS profiles below)."},
             {"settings", "Settings", "The gear icon at the top. Privacy, loop speed, backup and transfer, this Guide, and About."},
 
+            {"#", "Getting started", "First launch and the demo study."},
+            {"book", "Welcome screen", "Shown once on first launch. It explains what Insula does and asks you to confirm that it isn't for primary diagnosis."},
+            {"cube", "Demo study", "A synthetic CT head phantom with a prior and a current study (no real patient). Use it to try scrolling, windowing, measuring, MPR, and Compare. Load it from the welcome screen or the empty home screen; delete it like any study."},
+
             {"#", "Viewer", "Reading one study."},
             {"back", "Back", "Returns to the home screen."},
             {"share", "Share or export", "Share the current image, save it as PNG or JPEG, export key images as a PDF, or export the series as an anonymized ZIP."},
-            {"report", "Study details", "Patient, study, and series information, and where the study was downloaded from."},
+            {"report", "Study details", "Tap the patient name at the top to see patient, study, and series information, and where the study was downloaded from."},
             {"menu", "Tools menu", "Opens the tools panel on the right (see Tools menu below)."},
             {"chevron", "Series name", "Tap the name at the top left of a viewport to show another series of this study, or one from another study to compare."},
             {"pencil", "Measure and annotate", "The pencil at the top right of a viewport opens the measurement tools as a rail right below it. The pencil turns into a check mark; tap it to close the tools."},
             {"layers", "Thumbnail strip", "Series of this study with their image counts. Tap to show a series in the selected viewport; long-press for MPR, DICOM tags, or anonymized export."},
             {"info", "Overlay", "WL and WW (window level and width), SE (series number), and IM (image number of total) appear in the corners. The letters on the edges show patient orientation: A anterior, P posterior, R right, L left, H head, F feet."},
             {"move", "Gestures", "Pinch to zoom, drag with two fingers to pan, and double-tap to fit the image. One finger follows the chosen tool."},
+            {"layers", "Flick to glide", "With the Scroll tool, a quick flick keeps scrolling through the series and slows down on its own. Touch the image to stop."},
+            {"crossref", "Scrub bar", "Drag along the right edge of the image to jump anywhere in the series. The marker shows where you are."},
+            {"sliders", "Long-press for presets", "Long-press the image (with the Scroll, Window, or Pan tool) to choose a window preset."},
+
+            {"#", "Quick bar", "The row of buttons above the thumbnails: common tools in one tap."},
+            {"layers", "Scroll", "Swipe up or down to move through the series."},
+            {"brightness", "Window", "Drag sideways for contrast (width) and up or down for brightness (level). The setting is remembered for each series."},
+            {"ruler", "Measure", "Opens the measurement tools beside the pencil."},
+            {"sliders", "Presets", "Standard CT windows, the file's default, and full range."},
+            {"play", "Play", "Plays the series as a movie; tap again to pause. Speed is in More."},
+            {"compare", "Compare", "Shows a prior or later study of the same patient side by side, with the best-matching series (same modality, plane, and description), scrolling together."},
+            {"lay4", "Layout", "One to four viewports."},
+            {"link", "Link", "Appears with two or more viewports. Keeps them on the same anatomy while you scroll."},
+            {"align", "Align", "Appears with two or more viewports. If two studies don't line up, scroll each to the same anatomy and tap Align; from then on they scroll together from there."},
+            {"reset", "Reset", "Resets zoom, pan, rotation, flips, inversion, and window, and forgets the remembered window."},
+            {"menu", "More", "Opens the full tools menu."},
 
             {"#", "Tools menu (viewer)", "Opened with the menu icon at the top right."},
             {"layers", "Scroll", "Swipe up or down to move through the images of a series."},
             {"brightness", "Brightness (window)", "Swipe left or right to change contrast (window width) and up or down to change brightness (window level)."},
             {"ruler", "Measure", "Opens the measurement toolbar."},
-            {"link", "Link", "Keeps viewports on the same patient position while you scroll, when their series share a frame of reference."},
+            {"link", "Link", "Keeps viewports on the same anatomy while you scroll. Within a study, positions match exactly; across studies, stacks are lined up by their centres until you use Align."},
+            {"align", "Align linked viewports here", "Treats the slices now shown as the same anatomy, for comparing studies acquired in different positions."},
             {"loop", "Loop", "Plays the series as a movie (cine), useful for ultrasound, cardiac, or perfusion series."},
             {"speed", "Loop speed", "Slider from 1 to 60 frames per second. The default is set in Settings; series that record their own frame rate start at that rate."},
             {"lay4", "Layouts", "One viewport, two stacked, two side by side, three stacked, three in a row, or a 2 × 2 grid. Empty viewports fill with the next series."},
@@ -114,13 +136,26 @@ public class GuideActivity extends BaseActivity {
             {"export", "Export study set", "Packs all studies, an album, or chosen studies into a ZIP with their measurements, key images, and albums, optionally anonymized."},
             {"import", "Import study set", "Adds a study set's studies and restores its measurements, key images, and albums. The set also appears as an album."},
             {"trash", "Delete all studies", "Removes every study and its measurements from this phone."},
+            {"brightness", "Remember window settings", "On by default. Each series reopens with the brightness and contrast you last used. Reset in the quick bar forgets it."},
             {"info", "About Insula", "Version, Check for updates, the disclaimer, links to the source code, releases, user guide, and privacy policy, the licence texts, and how to contact the developer. Also opens when you tap the card at the top of Settings."},
             {"download", "Check for updates", "Asks GitHub for the newest release, only when you tap it. If there is one, the download opens in your browser; install it over this version and your studies and settings are kept."},
     };
 
-    final List<View[]> rows = new ArrayList<>();   // {rowView, sectionHeader}
-    final List<String> hay = new ArrayList<>();
-    TextView empty;
+    /** One collapsible section of the guide. */
+    static final class Section {
+        String title;
+        LinearLayout body;
+        ImageView chevron;
+        TextView count;
+        View header, block;
+        final List<View> rows = new ArrayList<>();
+        final List<String> hay = new ArrayList<>();
+        boolean expanded;
+    }
+
+    final List<Section> sections = new ArrayList<>();
+    TextView empty, toggleAll;
+    String query = "";
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
@@ -131,81 +166,144 @@ public class GuideActivity extends BaseActivity {
         TextView t = Ui.title(this, "Guide");
         t.setPadding(Ui.dp(this, 12), 0, 0, 0);
         top.addView(t, Ui.wrapWeight(1));
+        toggleAll = Ui.text(this, "Expand all", 14, Ui.VALUE);
+        toggleAll.setPadding(Ui.dp(this, 12), Ui.dp(this, 10), Ui.dp(this, 12), Ui.dp(this, 10));
+        toggleAll.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                boolean open = !allExpanded();
+                for (Section sec : sections) sec.expanded = open;
+                apply();
+            }
+        });
+        top.addView(toggleAll);
         screen.addView(top);
-        EditText q = Ui.field(this, "Search tools, e.g. Cobb, MIP, anonymize");
+
+        EditText q = Ui.field(this, "Search all tools, e.g. Cobb, MIP, compare");
         LinearLayout.LayoutParams ql = new LinearLayout.LayoutParams(-1, -2);
-        ql.setMargins(Ui.dp(this, 16), Ui.dp(this, 6), Ui.dp(this, 16), 0);
+        ql.setMargins(Ui.dp(this, 16), Ui.dp(this, 6), Ui.dp(this, 16), Ui.dp(this, 4));
         screen.addView(q, ql);
 
         ScrollView sv = new ScrollView(this);
         LinearLayout c = Ui.col(this);
-        c.setPadding(Ui.dp(this, 16), 0, Ui.dp(this, 16), Ui.dp(this, 32));
+        c.setPadding(Ui.dp(this, 12), Ui.dp(this, 4), Ui.dp(this, 12), Ui.dp(this, 32));
         sv.addView(c);
         screen.addView(sv, Ui.vweight(1));
 
-        View section = null;
+        Section sec = null;
         for (String[] g : G) {
             if (g[0].equals("#")) {
-                LinearLayout h = Ui.col(this);
-                TextView ht = Ui.text(this, g[1], 20, Ui.TEXT);
-                ht.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-                ht.setPadding(0, Ui.dp(this, 22), 0, Ui.dp(this, 2));
-                h.addView(ht);
-                h.addView(Ui.text(this, g[2], 13.5f, Ui.SUB));
-                View bar = new View(this);
-                bar.setBackgroundColor(Ui.ACCENT);
-                LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(Ui.dp(this, 48), Ui.dp(this, 3));
-                bl.setMargins(0, Ui.dp(this, 8), 0, Ui.dp(this, 4));
-                h.addView(bar, bl);
-                c.addView(h);
-                section = h;
+                sec = newSection(c, g[1], g[2]);
                 continue;
             }
-            LinearLayout r = Ui.row(this);
-            r.setGravity(Gravity.TOP);
-            r.setPadding(0, Ui.dp(this, 12), 0, Ui.dp(this, 12));
-            LinearLayout ic = Ui.row(this);
-            ic.setGravity(Gravity.CENTER);
-            ic.setBackground(Ui.rounded(Ui.CARD, Ui.dp(this, 22)));
-            ic.addView(Ui.iconView(this, g[0], 24, Ui.TEXT));
-            r.addView(ic, new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 44)));
-            LinearLayout col = Ui.col(this);
-            col.setPadding(Ui.dp(this, 14), 0, 0, 0);
-            TextView name = Ui.text(this, g[1], 16, Ui.TEXT);
-            name.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-            col.addView(name);
-            TextView d = Ui.text(this, g[2], 14, Ui.SUB);
-            d.setLineSpacing(0, 1.15f);
-            d.setPadding(0, Ui.dp(this, 3), 0, 0);
-            col.addView(d);
-            r.addView(col, Ui.wrapWeight(1));
-            c.addView(r);
-            rows.add(new View[]{r, section});
-            hay.add((g[1] + " " + g[2]).toLowerCase(Locale.ROOT));
+            if (sec == null) continue;
+            View row = toolRow(g);
+            sec.body.addView(row);
+            sec.rows.add(row);
+            sec.hay.add((g[1] + " " + g[2]).toLowerCase(Locale.ROOT));
         }
         empty = Ui.text(this, "No tools match. Try a shorter word.", 15, Ui.SUB);
-        empty.setPadding(0, Ui.dp(this, 30), 0, 0);
-        empty.setVisibility(View.GONE);
+        empty.setPadding(Ui.dp(this, 8), Ui.dp(this, 30), 0, 0);
         c.addView(empty);
 
         q.addTextChangedListener(new TextWatcher() {
             public void beforeTextChanged(CharSequence s, int a, int b2, int cc) { }
-            public void onTextChanged(CharSequence s, int a, int b2, int cc) { filter(s.toString()); }
+            public void onTextChanged(CharSequence s, int a, int b2, int cc) { query = s.toString().trim().toLowerCase(Locale.ROOT); apply(); }
             public void afterTextChanged(Editable s) { }
         });
         setContentView(screen);
+        apply();
     }
 
-    void filter(String q) {
-        q = q.trim().toLowerCase(Locale.ROOT);
-        java.util.Set<View> sections = new java.util.HashSet<>();
+    Section newSection(LinearLayout parent, String title, String desc) {
+        final Section sec = new Section();
+        sec.title = title;
+        LinearLayout block = Ui.col(this);
+        block.setBackground(Ui.rounded(Ui.CARD, Ui.dp(this, 14)));
+        block.setClipToOutline(true);
+        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, -2);
+        bl.topMargin = Ui.dp(this, 10);
+        parent.addView(block, bl);
+
+        LinearLayout h = Ui.row(this);
+        h.setPadding(Ui.dp(this, 16), Ui.dp(this, 14), Ui.dp(this, 12), Ui.dp(this, 14));
+        h.setBackground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x22FFFFFF), null,
+                new android.graphics.drawable.ColorDrawable(0xFFFFFFFF)));
+        LinearLayout hc = Ui.col(this);
+        TextView ht = Ui.text(this, title, 17, Ui.TEXT);
+        ht.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        hc.addView(ht);
+        TextView hd = Ui.text(this, desc, 13, Ui.SUB);
+        hd.setPadding(0, Ui.dp(this, 2), 0, 0);
+        hc.addView(hd);
+        h.addView(hc, Ui.wrapWeight(1));
+        sec.count = Ui.text(this, "", 12.5f, Ui.VALUE);
+        sec.count.setPadding(Ui.dp(this, 8), 0, Ui.dp(this, 6), 0);
+        h.addView(sec.count);
+        sec.chevron = Ui.iconView(this, "chevron", 22, Ui.TEXT);
+        h.addView(sec.chevron);
+        h.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { sec.expanded = !sec.expanded; apply(); }
+        });
+        Ui.tooltip(h, "Show or hide " + title);
+        block.addView(h);
+
+        sec.body = Ui.col(this);
+        sec.body.setPadding(Ui.dp(this, 14), 0, Ui.dp(this, 14), Ui.dp(this, 8));
+        block.addView(sec.body);
+        sec.header = h;
+        sec.block = block;
+        sections.add(sec);
+        return sec;
+    }
+
+    View toolRow(String[] g) {
+        LinearLayout r = Ui.row(this);
+        r.setGravity(Gravity.TOP);
+        r.setPadding(0, Ui.dp(this, 10), 0, Ui.dp(this, 10));
+        LinearLayout ic = Ui.row(this);
+        ic.setGravity(Gravity.CENTER);
+        ic.setBackground(Ui.rounded(Ui.BG, Ui.dp(this, 20)));
+        ic.addView(Ui.iconView(this, g[0], 22, Ui.TEXT));
+        r.addView(ic, new LinearLayout.LayoutParams(Ui.dp(this, 40), Ui.dp(this, 40)));
+        LinearLayout col = Ui.col(this);
+        col.setPadding(Ui.dp(this, 14), 0, 0, 0);
+        TextView name = Ui.text(this, g[1], 15.5f, Ui.TEXT);
+        name.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        col.addView(name);
+        TextView d = Ui.text(this, g[2], 14, Ui.SUB);
+        d.setLineSpacing(0, 1.15f);
+        d.setPadding(0, Ui.dp(this, 3), 0, 0);
+        col.addView(d);
+        r.addView(col, Ui.wrapWeight(1));
+        return r;
+    }
+
+    boolean allExpanded() {
+        for (Section sec : sections) if (!sec.expanded) return false;
+        return true;
+    }
+
+    /** Shows sections and rows for the current search and expansion state. */
+    void apply() {
+        boolean searching = !query.isEmpty();
         int shown = 0;
-        for (int i = 0; i < rows.size(); i++) {
-            boolean on = q.isEmpty() || hay.get(i).contains(q);
-            rows.get(i)[0].setVisibility(on ? View.VISIBLE : View.GONE);
-            if (on) { shown++; sections.add(rows.get(i)[1]); }
+        for (Section sec : sections) {
+            int matches = 0;
+            for (int i = 0; i < sec.rows.size(); i++) {
+                boolean on = !searching || sec.hay.get(i).contains(query) || sec.title.toLowerCase(Locale.ROOT).contains(query);
+                sec.rows.get(i).setVisibility(on ? View.VISIBLE : View.GONE);
+                if (on) matches++;
+            }
+            shown += matches;
+            // While searching, sections with matches open automatically; your own open/closed choice returns after.
+            boolean open = searching ? matches > 0 : sec.expanded;
+            sec.block.setVisibility(searching && matches == 0 ? View.GONE : View.VISIBLE);
+            sec.body.setVisibility(open ? View.VISIBLE : View.GONE);
+            sec.chevron.setRotation(open ? 180 : 0);
+            sec.count.setText(searching ? matches + (matches == 1 ? " match" : " matches") : sec.rows.size() + (sec.rows.size() == 1 ? " item" : " items"));
         }
-        for (View[] r : rows) if (r[1] != null) r[1].setVisibility(q.isEmpty() || sections.contains(r[1]) ? View.VISIBLE : View.GONE);
-        empty.setVisibility(shown == 0 ? View.VISIBLE : View.GONE);
+        empty.setVisibility(searching && shown == 0 ? View.VISIBLE : View.GONE);
+        toggleAll.setVisibility(searching ? View.GONE : View.VISIBLE);
+        toggleAll.setText(allExpanded() ? "Collapse all" : "Expand all");
     }
 }

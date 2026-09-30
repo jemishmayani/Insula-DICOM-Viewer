@@ -1,6 +1,6 @@
 # DICOM conformance statement
 
-*Insula DICOM Viewer 1.6.0 for Android. Last updated 29 September 2026.*
+*Insula DICOM Viewer 1.7.0 for Android. Last updated 29 September 2026.*
 
 This statement follows the spirit of DICOM PS3.2. It describes which DICOM objects, encodings, and services Insula supports.
 
@@ -116,6 +116,8 @@ If a profile's address is not a DICOMweb root, Test connection tries common root
 | Pixel data | 16-bit signed (Bits Stored 16), MONOCHROME2, Rescale Slope 1, Intercept 0 (values already in modality units; Rescale Type HU for CT), Window Center/Width from the view |
 
 Saved series are stored in the local library as part of the same study. Insula does not send them to a PACS.
+
+**Demo study.** The optional demo creates two synthetic CT Image Storage studies (patient ID `INSULA-DEMO`, institution "Insula demo (synthetic data)") with fixed UIDs under `2.25.3301…`, so creating it again adds no duplicates.
 
 ## 5. Anonymized export
 

@@ -45,6 +45,10 @@ public final class Icons extends Drawable {
             case "search": c.drawCircle(10.5f, 10.5f, 6.5f, p); line(c, 15.5f, 15.5f, 21, 21); break;
             case "plus": p.setStrokeWidth(2.2f); line(c, 12, 5, 12, 19); line(c, 5, 12, 19, 12); break;
             case "chevron": open(c, 6, 9, 12, 15, 18, 9); break;
+            case "play": fill(); closed(c, 7, 4.5f, 19.5f, 12, 7, 19.5f); break;
+            case "pause": fill(); c.drawRoundRect(new RectF(6, 5, 10, 19), 1, 1, p); c.drawRoundRect(new RectF(14, 5, 18, 19), 1, 1, p); break;
+            case "compare": c.drawRoundRect(new RectF(2.5f, 5, 11, 19), 1.5f, 1.5f, p); c.drawRoundRect(new RectF(13, 5, 21.5f, 19), 1.5f, 1.5f, p); line(c, 5.5f, 12, 8, 12); line(c, 16, 12, 18.5f, 12); break;
+            case "align": line(c, 3, 12, 21, 12); open(c, 7, 7, 3, 12, 7, 17); open(c, 17, 7, 21, 12, 17, 17); line(c, 12, 3, 12, 8); line(c, 12, 16, 12, 21); break;
             case "chevronr": open(c, 9, 6, 15, 12, 9, 18); break;
             case "speed": c.drawArc(new RectF(3, 5, 21, 23), 180, 180, false, p); line(c, 12, 14, 16.5f, 8.5f); fill(); c.drawCircle(12, 14, 1.8f, p); break;
             case "share":

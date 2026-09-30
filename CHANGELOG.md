@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.7.0
+- **Smoother scrolling:** slices are decoded in the background, so the screen never waits. Several slices decode in parallel, and prefetching reads ahead in the scrolling direction (the whole series when it fits in memory)
+- **Faster window/level:** redraws at most once per frame, spread across CPU cores, with a reduced preview while dragging on very large images
+- **Faster MPR:** slices are decoded in parallel when the volume is built; planes render at half resolution while you drag, then at full quality
+- **Gestures:** flick to glide through a series, a scrub bar along the right edge, and long-press for window presets
+- **Quick bar:** Scroll, Window, Measure, Presets, Play, Compare, Layout, Link, Align, Reset, and More, one tap each. Study details moved to the patient name
+- **Compare:** a prior or later study of the same patient side by side, with the best-matching series and linked scrolling across studies (lined up by stack centres, or by **Align** from the slices shown)
+- **Remembered window settings** per series (Settings › Viewer › Remember window settings)
+- **First use:** a welcome screen with the intended-use confirmation, a synthetic demo study (prior and current), an actionable empty home screen, and a one-time tips card in the viewer
+- Settings: the header now only shows version and library information; About has its own row
+- Guide: collapsible sections with item counts, Expand/Collapse all, and search that opens matching sections
+- **Android 16:** targets API level 36, with edge-to-edge layout and predictive back on all supported versions (Android 7.0 and later)
+- Tests for windowing, previews, concurrent loading, prefetch, demo generation, comparison alignment, and parallel MPR building
+
 ## 1.6.0
 - New About page (Settings › About Insula, or tap the card at the top of Settings): version, disclaimer, links to the guides, source code, releases, issues, and privacy policy, licence texts, and developer contact
 - Check for updates: asks GitHub for the latest release only when tapped, and offers the download

@@ -23,6 +23,12 @@ public interface SliceProvider {
     Library.SliceRef ref(int i);
     String seriesName();
     int seriesNumber();
+    /** True if images come from storage and should be loaded off the UI thread. */
+    boolean async();
+    /** The image if it's ready right now, else null (async providers only). */
+    RawImage peek(int i);
+    /** Loads the image in the background (async providers only). */
+    void load(int i, Library.Done cb);
 
     final class SeriesProvider implements SliceProvider {
         public final Library.Series series;
@@ -52,6 +58,9 @@ public interface SliceProvider {
         public Library.SliceRef ref(int i) { return i >= 0 && i < sl.size() ? sl.get(i) : null; }
         public String seriesName() { return series.desc.isEmpty() ? "Series " + series.number : series.desc; }
         public int seriesNumber() { return series.number; }
+        public boolean async() { return true; }
+        public RawImage peek(int i) { return i >= 0 && i < sl.size() ? Library.peek(sl.get(i)) : null; }
+        public void load(int i, Library.Done cb) { Library.loadAsync(sl.get(i), cb); }
 
         public String[] patientLines() {
             Library.Study s = series.study;

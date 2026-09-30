@@ -55,7 +55,8 @@ import java.util.Locale;
 import java.util.Map;
 
 public class MainActivity extends BaseActivity {
-    static final int REQ_FILES = 1, REQ_FOLDER = 2;
+    static final int REQ_FILES = 1, REQ_FOLDER = 2, REQ_WELCOME = 3;
+    LinearLayout emptyPanel, emptyActions;
     static final String[] SORTS = {"Newest", "Oldest", "Patient name", "Modality", "Size"};
     final Handler h = new Handler(Looper.getMainLooper());
     int sort = 0, tab = 0;
@@ -163,13 +164,13 @@ public class MainActivity extends BaseActivity {
         setTab(0);
         if (!Library.scanned) scanAsync(); else refresh();
         handleIntent(getIntent());
-        if (!Ui.prefs(this).getBoolean("disclaimer", false)) showDisclaimer(true);
+        if (!Ui.prefs(this).getBoolean("disclaimer", false)) startActivityForResult(new Intent(this, WelcomeActivity.class), REQ_WELCOME);
     }
 
-    @Override public void onBackPressed() {
-        if (search.getVisibility() == View.VISIBLE) { toggleSearch(); return; }
-        if (albumFilter != null) { albumFilter = null; refresh(); return; }
-        super.onBackPressed();
+    @Override protected boolean handleBack() {
+        if (search.getVisibility() == View.VISIBLE) { toggleSearch(); return true; }
+        if (albumFilter != null) { albumFilter = null; refresh(); return true; }
+        return false;
     }
 
     @Override protected void onNewIntent(Intent i) { super.onNewIntent(i); handleIntent(i); }
@@ -216,10 +217,23 @@ public class MainActivity extends BaseActivity {
             public boolean onItemLongClick(AdapterView<?> a, View v, int pos, long id) { studyOptions(shown.get(pos)); return true; }
         });
         f.addView(studyList);
+        emptyPanel = Ui.col(this);
+        emptyPanel.setGravity(Gravity.CENTER);
+        emptyPanel.setPadding(Ui.dp(this, 32), 0, Ui.dp(this, 32), Ui.dp(this, 60));
         emptyView = Ui.text(this, "", 16, Ui.SUB);
         emptyView.setGravity(Gravity.CENTER);
-        emptyView.setPadding(Ui.dp(this, 36), 0, Ui.dp(this, 36), Ui.dp(this, 60));
-        f.addView(emptyView, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        emptyPanel.addView(emptyView);
+        emptyActions = Ui.col(this);
+        emptyActions.setPadding(0, Ui.dp(this, 20), 0, 0);
+        emptyActions.addView(Ui.pill(this, "Import studies", "import", new View.OnClickListener() { public void onClick(View v) { importSheet(); } }), new LinearLayout.LayoutParams(-1, -2));
+        Button pacsB = Ui.btn(this, "Search a hospital PACS", new View.OnClickListener() { public void onClick(View v) { startActivity(new Intent(MainActivity.this, PacsActivity.class)); } });
+        pacsB.setPadding(Ui.dp(this, 20), Ui.dp(this, 13), Ui.dp(this, 20), Ui.dp(this, 13));
+        emptyActions.addView(pacsB, new LinearLayout.LayoutParams(-1, -2));
+        Button demoB = Ui.btn(this, "Try the demo study", new View.OnClickListener() { public void onClick(View v) { loadDemo(); } });
+        demoB.setPadding(Ui.dp(this, 20), Ui.dp(this, 13), Ui.dp(this, 20), Ui.dp(this, 13));
+        emptyActions.addView(demoB, new LinearLayout.LayoutParams(-1, -2));
+        emptyPanel.addView(emptyActions, new LinearLayout.LayoutParams(Math.min(Ui.dp(this, 360), getResources().getDisplayMetrics().widthPixels - Ui.dp(this, 64)), -2));
+        f.addView(emptyPanel, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         p.addView(f, Ui.vweight(1));
         return p;
     }
@@ -373,9 +387,10 @@ public class MainActivity extends BaseActivity {
         albumChip.setText("Album: " + albumFilter + "  ✕");
         statusView.setText(shown.isEmpty() ? "" : shown.size() + " stud" + (shown.size() == 1 ? "y" : "ies"));
         if (!Library.scanned) emptyView.setText("Loading library…");
-        else if (all.isEmpty()) emptyView.setText("No studies yet.\n\nTap + to import DICOM files, a ZIP, a folder copied from a patient CD, or studies from a PACS.");
+        else if (all.isEmpty()) emptyView.setText("No studies yet.\n\nImport DICOM files, a ZIP, or a folder copied from a patient CD, download from a PACS, or explore the demo study.");
         else if (shown.isEmpty()) emptyView.setText(albumFilter != null && q.isEmpty() ? "This album is empty. Long-press a study to add it." : "No studies match your search.");
-        emptyView.setVisibility(shown.isEmpty() ? View.VISIBLE : View.GONE);
+        emptyPanel.setVisibility(shown.isEmpty() ? View.VISIBLE : View.GONE);
+        emptyActions.setVisibility(Library.scanned && all.isEmpty() ? View.VISIBLE : View.GONE);
 
         albumNames.clear();
         albumNames.addAll(albums.keySet());
@@ -451,6 +466,41 @@ public class MainActivity extends BaseActivity {
         if (!uris.isEmpty()) importUris(uris, null);
     }
 
+    /** Creates the synthetic demo studies (prior and current) and opens the current one. */
+    void loadDemo() {
+        pd = progress("Creating the demo study…");
+        new Thread() {
+            public void run() {
+                String err = null;
+                int[] r = {0, 0};
+                try {
+                    r = DemoStudy.create(new DemoStudy.Progress() {
+                        public void update(final int done, final int total) {
+                            if (done % 8 == 0) h.post(new Runnable() { public void run() { if (pd != null) pd.setMessage("Creating the demo study… " + (done * 100 / total) + "%"); } });
+                        }
+                    });
+                    Store.setSource(MainActivity.this, DemoStudy.studyUid(0), "Insula demo (synthetic)");
+                    Store.setSource(MainActivity.this, DemoStudy.studyUid(1), "Insula demo (synthetic)");
+                    Store.addToAlbum(MainActivity.this, "Demo", DemoStudy.studyUid(0));
+                    Store.addToAlbum(MainActivity.this, "Demo", DemoStudy.studyUid(1));
+                } catch (Throwable t) { err = t.getMessage(); }
+                final String fe = err;
+                h.post(new Runnable() {
+                    public void run() {
+                        if (pd != null) { pd.dismiss(); pd = null; }
+                        refresh();
+                        if (fe != null) { Ui.toast(MainActivity.this, "Couldn't create the demo: " + fe); return; }
+                        Library.Study cur = Library.study(DemoStudy.studyUid(1));
+                        if (cur != null) {
+                            Ui.toast(MainActivity.this, "Demo loaded: a prior and a current study. Try Compare in the viewer.");
+                            openStudy(cur);
+                        }
+                    }
+                });
+            }
+        }.start();
+    }
+
     void pickFiles() {
         Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         i.addCategory(Intent.CATEGORY_OPENABLE);
@@ -464,6 +514,11 @@ public class MainActivity extends BaseActivity {
     @Override protected void onActivityResult(int req, int res, Intent data) {
         super.onActivityResult(req, res, data);
         if (res != RESULT_OK || data == null) return;
+        if (req == REQ_WELCOME) {
+            String a = data.getStringExtra(WelcomeActivity.ACTION);
+            if (WelcomeActivity.DEMO.equals(a)) loadDemo(); else if (WelcomeActivity.IMPORT.equals(a)) importSheet();
+            return;
+        }
         if (req == REQ_FILES) {
             List<Uri> uris = new ArrayList<>();
             if (data.getClipData() != null) for (int k = 0; k < data.getClipData().getItemCount(); k++) uris.add(data.getClipData().getItemAt(k).getUri());

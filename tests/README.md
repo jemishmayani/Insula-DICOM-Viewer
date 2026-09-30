@@ -15,6 +15,8 @@ The first run downloads pydicom's test data and the org.json sources, so it need
 | MPR geometry | Phantoms with known sizes: true planes from axial, sagittal, and gantry-tilted acquisitions; oblique planes; MIP/MinIP/average slabs; curved MPR; 3D MIP and volume rendering. PNG renders are written to `tests/.work/`. |
 | DICOM writer | A saved oblique MIP reformat is re-read by the app and by pydicom, and its geometry tags locate the phantom correctly. |
 | Backup | Passphrase encryption (a wrong passphrase is rejected); annotation store export, merge, dedupe, and delete; study-set ZIP import; anonymized copies keep their measurements. |
+| Smooth viewing | Windowing output identical to the reference at 512² and 3000²; drag previews sample the full result; MPR drag previews keep size and spacing and are faster; 8 threads loading one slice share one decode; background loading and direction-aware prefetch. |
+| Demo and comparison | Demo prior and current studies (no duplicates when recreated); Compare finds the patient's other study and its matching series; linked scrolling lands on the same anatomy across studies despite a 6 mm shift; parallel MPR build puts the lesion and skull where they were drawn. |
 | Update checker | Version comparison (including v1.10 vs 1.9.9 and pre-release tags) and picking the APK from GitHub's release data, with a fallback to the releases page. |
 | PACS: two institutions | Password and token sign-in against two mock servers; a wrong password gives a clear 401. |
 | PACS: HTTP 406 | Finds DICOMweb behind a portal and at the dcm4chee path, falls back to plain JSON, retries without optional search parameters after a 400, and explains an unknown host. |

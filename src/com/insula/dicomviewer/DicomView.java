@@ -36,6 +36,12 @@ public class DicomView extends View {
         void onImageTap(DicomView v, float ix, float iy);
         void onArrowCreated(DicomView v, Ann a);
         void onSelection(DicomView v, Ann a);
+        /** A slice that was loading in the background is now shown. */
+        void onImageReady(DicomView v);
+        /** Long press on the image with a navigation tool (scroll, window, pan). */
+        void onLongPressImage(DicomView v);
+        /** The finger was lifted after scrolling, windowing, panning, or zooming. */
+        void onInteractionEnd(DicomView v);
     }
 
     /** Receives raw touch phases (0 down, 1 move, 2 up) for crosshair, orbit, and curve tools. */
@@ -88,6 +94,34 @@ public class DicomView extends View {
     final java.util.ArrayDeque<Undo> undo = new java.util.ArrayDeque<>();
     final Paint selLine = new Paint(Paint.ANTI_ALIAS_FLAG), handleFill = new Paint(Paint.ANTI_ALIAS_FLAG);
     public float crossX = Float.NaN, crossY = Float.NaN;
+    // Smooth loading and rendering
+    int loadToken;
+    public boolean loading, touching, interacting, dirty;
+    public int scrollDir = 1;
+    Bitmap preview;
+    int[] pbuf;
+    int previewStep = 1;
+    // Momentum scrolling and the edge scrub bar
+    float flingV;
+    long flingLast, lastScrollMs;
+    boolean scrubbing;
+    public boolean scrubEnabled = true;
+    final Paint scrubTrack = new Paint(Paint.ANTI_ALIAS_FLAG), scrubThumb = new Paint(Paint.ANTI_ALIAS_FLAG);
+    final Runnable flingStep = new Runnable() {
+        public void run() {
+            if (Math.abs(flingV) < 250 * dp || prov == null) { flingV = 0; endInteraction(); return; }
+            long now = android.os.SystemClock.uptimeMillis();
+            float dt = Math.min(0.05f, (now - flingLast) / 1000f);
+            flingLast = now;
+            scrollAcc += flingV * dt;
+            float step = scrollStep();
+            int before = index;
+            while (Math.abs(scrollAcc) >= step) { int sg = scrollAcc > 0 ? 1 : -1; setIndex(index + sg); scrollAcc -= sg * step; }
+            if ((index == 0 && flingV < 0) || (index == count() - 1 && flingV > 0) || (before == index && count() <= 1)) { flingV = 0; endInteraction(); return; }
+            flingV *= (float) Math.exp(-dt * 2.8);
+            postOnAnimation(this);
+        }
+    };
     public boolean showAnnotations = true, showMeasures = true;
     public float topInset;
     /** Cross-reference lines from other viewports, in this image's pixel coordinates (x1,y1,x2,y2). */
@@ -157,7 +191,28 @@ public class DicomView extends View {
             @Override public boolean onSingleTapUp(MotionEvent e) {
                 return false;
             }
+            @Override public boolean onFling(MotionEvent e1, MotionEvent e2, float vx, float vy) {
+                if (tool != T_SCROLL || multi || scrubbing || count() < 3 || Math.abs(vy) < Math.abs(vx)) return false;
+                flingV = vy;
+                flingLast = android.os.SystemClock.uptimeMillis();
+                interacting = true;
+                postOnAnimation(flingStep);
+                return true;
+            }
+            @Override public void onLongPress(MotionEvent e) {
+                if (listener == null || multi || scrubbing) return;
+                if (tool == T_SCROLL || tool == T_WL || tool == T_PAN) {
+                    performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
+                    listener.onLongPressImage(DicomView.this);
+                }
+            }
         });
+        scrubTrack.setColor(0x55FFFFFF);
+        scrubTrack.setStrokeCap(Paint.Cap.ROUND);
+        scrubTrack.setStrokeWidth(3 * dp);
+        scrubThumb.setColor(Ui.ACCENT);
+        scrubThumb.setStrokeCap(Paint.Cap.ROUND);
+        scrubThumb.setStrokeWidth(6 * dp);
     }
 
     // ---------- data ----------
@@ -179,22 +234,75 @@ public class DicomView extends View {
         if (prov == null || prov.count() == 0) return;
         if (i < 0) i = 0;
         if (i >= prov.count()) i = prov.count() - 1;
+        if (i != index) { scrollDir = i > index ? 1 : -1; lastScrollMs = android.os.SystemClock.uptimeMillis(); }
         index = i;
         if (pending != null && !pending.done) { removeAnn(pending); pending = null; }
         if (selected != null) { selected = null; notifySel(); }
-        try { img = prov.image(i); error = null; }
-        catch (Throwable t) { img = null; error = t.getMessage() == null ? t.toString() : t.getMessage(); }
-        if (img != null && !wlSet) { double[] d = img.defaultWindow(); wc = d[0]; ww = d[1]; wlSet = true; }
-        render();
+        if (prov.async()) {
+            RawImage r = prov.peek(i);
+            if (r != null) { loadToken++; loading = false; apply(r); }
+            else {
+                // Keep showing the previous slice until this one is decoded off the UI thread.
+                loading = true;
+                final int tok = ++loadToken;
+                prov.load(i, new Library.Done() {
+                    public void done(final RawImage r, final Throwable err) {
+                        post(new Runnable() {
+                            public void run() {
+                                if (tok != loadToken) return;
+                                loading = false;
+                                if (err != null) { img = null; error = err.getMessage() == null ? err.toString() : err.getMessage(); dirty = true; }
+                                else apply(r);
+                                invalidate();
+                                if (listener != null) listener.onImageReady(DicomView.this);
+                            }
+                        });
+                    }
+                });
+            }
+        } else {
+            try { apply(prov.image(i)); }
+            catch (Throwable t) { img = null; error = t.getMessage() == null ? t.toString() : t.getMessage(); dirty = true; }
+        }
         invalidate();
         if (listener != null) listener.onIndexChanged(this);
     }
 
+    void apply(RawImage r) {
+        img = r;
+        error = null;
+        if (img != null && !wlSet) { double[] d = img.defaultWindow(); wc = d[0]; ww = d[1]; wlSet = true; }
+        dirty = true;
+    }
+
+    float scrollStep() { return Math.max(6 * dp, Math.min(24 * dp, getHeight() / (float) Math.max(10, count()))); }
+
+    void endInteraction() {
+        boolean was = interacting;
+        interacting = false;
+        if (was && previewStep > 1) { dirty = true; invalidate(); }
+        if (listener != null) listener.onInteractionEnd(this);
+    }
+
+    public void stopFling() { flingV = 0; removeCallbacks(flingStep); }
+
     public void refresh() { if (prov != null) setIndex(index); }
+
+    /** Shows slice i with the image fully loaded before returning (for exports that snapshot each slice). */
+    public void setIndexNow(int i) {
+        if (prov == null || prov.count() == 0) return;
+        i = Math.max(0, Math.min(prov.count() - 1, i));
+        index = i;
+        loadToken++;
+        loading = false;
+        try { apply(prov.image(i)); } catch (Throwable t) { img = null; error = t.getMessage(); dirty = true; }
+        if (dirty) doRender();
+    }
 
     public void setWindow(double c, double w) {
         wc = c; ww = Math.max(1, w); wlSet = true;
-        render(); invalidate();
+        dirty = true;
+        postInvalidateOnAnimation();
     }
 
     public void autoWindow() {
@@ -214,10 +322,26 @@ public class DicomView extends View {
         invalidate();
     }
 
-    void render() {
+    /** Marks the image for re-rendering; the work happens once per frame in onDraw. */
+    void render() { dirty = true; invalidate(); }
+
+    /** Windowing into a bitmap. While the user drags on very large images, a reduced preview is rendered instead. */
+    void doRender() {
+        dirty = false;
         if (img == null) { bmp = null; return; }
-        int n = img.w * img.h;
-        if (buf == null || buf.length != n) buf = new int[n];
+        long n = (long) img.w * img.h;
+        int step = !interacting ? 1 : n > 10_000_000 ? 3 : n > 2_500_000 ? 2 : 1;
+        previewStep = step;
+        if (step > 1) {
+            int pw = Math.max(1, img.w / step), ph = Math.max(1, img.h / step);
+            if (pbuf == null || pbuf.length != pw * ph) pbuf = new int[pw * ph];
+            if (preview == null || preview.getWidth() != pw || preview.getHeight() != ph) preview = Bitmap.createBitmap(pw, ph, Bitmap.Config.ARGB_8888);
+            img.render(pbuf, wc, ww, invert, step);
+            preview.setPixels(pbuf, 0, pw, 0, 0, pw, ph);
+            return;
+        }
+        int nn = img.w * img.h;
+        if (buf == null || buf.length != nn) buf = new int[nn];
         if (bmp == null || bmp.getWidth() != img.w || bmp.getHeight() != img.h) bmp = Bitmap.createBitmap(img.w, img.h, Bitmap.Config.ARGB_8888);
         img.render(buf, wc, ww, invert);
         bmp.setPixels(buf, 0, img.w, 0, 0, img.w, img.h);
@@ -410,7 +534,14 @@ public class DicomView extends View {
     // ---------- touch ----------
     @Override public boolean onTouchEvent(MotionEvent e) {
         int a = e.getActionMasked();
-        if (a == MotionEvent.ACTION_DOWN && listener != null) listener.onActivated(this);
+        if (a == MotionEvent.ACTION_DOWN) { stopFling(); touching = true; if (listener != null) listener.onActivated(this); }
+        if (scrubbing || (a == MotionEvent.ACTION_DOWN && inScrubZone(e.getX(), e.getY()))) {
+            scrubbing = a != MotionEvent.ACTION_UP && a != MotionEvent.ACTION_CANCEL;
+            if (a == MotionEvent.ACTION_DOWN) interacting = true;
+            scrubTo(e.getY());
+            if (!scrubbing) { touching = false; endInteraction(); }
+            return true;
+        }
         sgd.onTouchEvent(e);
         gd.onTouchEvent(e);
         if (a == MotionEvent.ACTION_POINTER_DOWN || a == MotionEvent.ACTION_POINTER_UP) { hasFocus = false; }
@@ -439,15 +570,31 @@ public class DicomView extends View {
                 break;
             case MotionEvent.ACTION_UP:
                 if (!multi && img != null) up(x, y);
-                multi = false; hasFocus = false;
+                multi = false; hasFocus = false; touching = false;
+                if (flingV == 0) endInteraction();
                 break;
             case MotionEvent.ACTION_CANCEL:
                 if (pending != null && !pending.done && phase == 0) { removeAnn(pending); pending = null; }
                 if (editing) { editing = false; dragIdx = -1; dragBody = false; persist(); }
-                multi = false;
+                multi = false; touching = false;
+                endInteraction();
                 break;
         }
         return true;
+    }
+
+    float scrubTop() { return topInset + 56 * dp; }
+    float scrubBottom() { return getHeight() - text.getTextSize() * 1.4f * 3.6f - 16 * dp; }
+
+    boolean inScrubZone(float x, float y) {
+        return scrubEnabled && count() > 2 && !isAnnTool(tool) && !hooked() && x > getWidth() - 30 * dp && y > scrubTop() && y < scrubBottom();
+    }
+
+    void scrubTo(float y) {
+        float t = (y - scrubTop()) / Math.max(1, scrubBottom() - scrubTop());
+        int i = Math.round(Math.max(0, Math.min(1, t)) * (count() - 1));
+        if (i != index) setIndex(i);
+        invalidate();
     }
 
     boolean hooked() { return hook != null && (tool == T_CROSS || tool == T_ORBIT || tool == T_CURVE); }
@@ -517,13 +664,15 @@ public class DicomView extends View {
                 if (img.rgb && !wlOnRgb) return;
                 double range = Math.max(1, img.modMax() - img.modMin());
                 double s = range / Math.max(1, getWidth()) * 1.2;
+                interacting = true;
                 setWindow(wc - dy * s, ww + dx * s);
                 if (listener != null) listener.onWindowChanged(this);
                 return;
-            case T_PAN: panX += dx; panY += dy; break;
+            case T_PAN: panX += dx; panY += dy; interacting = true; break;
             case T_SCROLL: {
+                interacting = true;
                 scrollAcc += dy;
-                float step = Math.max(6 * dp, Math.min(24 * dp, getHeight() / (float) Math.max(10, count())));
+                float step = scrollStep();
                 while (Math.abs(scrollAcc) >= step) { int sg = scrollAcc > 0 ? 1 : -1; setIndex(index + sg); scrollAcc -= sg * step; }
                 break;
             }
@@ -665,11 +814,14 @@ public class DicomView extends View {
         c.drawColor(Color.BLACK);
         computeMatrix();
         int W = getWidth(), H = getHeight();
-        if (bmp != null) {
+        if (dirty) doRender();
+        Bitmap shown = previewStep > 1 && preview != null ? preview : bmp;
+        if (shown != null) {
             c.save();
             c.concat(m);
-            bmpPaint.setFilterBitmap(zoom < 3);
-            c.drawBitmap(bmp, 0, 0, bmpPaint);
+            if (shown == preview) c.scale(img.w / (float) preview.getWidth(), img.h / (float) preview.getHeight());
+            bmpPaint.setFilterBitmap(zoom < 3 || shown == preview);
+            c.drawBitmap(shown, 0, 0, bmpPaint);
             c.restore();
         }
         if (img != null && !Float.isNaN(crossX)) {
@@ -733,6 +885,17 @@ public class DicomView extends View {
                 c.drawText("★ Key image", W / 2f, topInset + pad + lh, orientP);
                 orientP.setTextAlign(Paint.Align.LEFT);
             }
+        }
+        if (overlay && !exporting && prov != null && count() > 2 && scrubEnabled && !isAnnTool(tool) && !hooked()) {
+            float x = getWidth() - 10 * dp, t0 = scrubTop(), t1 = scrubBottom();
+            long since = android.os.SystemClock.uptimeMillis() - lastScrollMs;
+            boolean hot = scrubbing || since < 900;
+            scrubTrack.setAlpha(hot ? 110 : 45);
+            c.drawLine(x, t0, x, t1, scrubTrack);
+            float ty = t0 + (t1 - t0) * index / (float) (count() - 1);
+            scrubThumb.setAlpha(hot ? 255 : 120);
+            c.drawLine(x, ty - 10 * dp, x, ty + 10 * dp, scrubThumb);
+            if (hot && !scrubbing) postInvalidateDelayed(950);
         }
         border.setColor(accent);
         if (showBorder && active && !exporting) c.drawRoundRect(new RectF(1.5f * dp, 1.5f * dp, W - 1.5f * dp, H - 1.5f * dp), 6 * dp, 6 * dp, border);

@@ -65,8 +65,7 @@ public class SettingsActivity extends BaseActivity {
         storage = Ui.text(this, "", 13, Ui.SUB);
         hc.addView(storage);
         head.addView(hc, Ui.wrapWeight(1));
-        head.addView(Ui.iconView(this, "chevronr", 20, Ui.SUB));
-        head.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { startActivity(new Intent(SettingsActivity.this, AboutActivity.class)); } });
+
         LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(-1, -2);
         hl.topMargin = Ui.dp(this, 14);
         c.addView(head, hl);
@@ -74,6 +73,9 @@ public class SettingsActivity extends BaseActivity {
         LinearLayout g = Ui.group(this, c, "Viewer");
         Ui.slider(this, g, "speed", Ui.C_BLUE, "Default loop speed", 1, 60, Ui.prefs(this).getInt("fps", 10), "fps", new Ui.OnValue() {
             public void value(int v) { Ui.prefs(SettingsActivity.this).edit().putInt("fps", v).apply(); }
+        });
+        Ui.settingSwitch(this, g, "brightness", Ui.C_BLUE, "Remember window settings", "Reopen each series with the brightness and contrast you last used", Ui.prefs(this).getBoolean("remember_wl", true), new CompoundButton.OnCheckedChangeListener() {
+            public void onCheckedChanged(CompoundButton x, boolean on) { Ui.prefs(SettingsActivity.this).edit().putBoolean("remember_wl", on).apply(); }
         });
         Ui.settingSwitch(this, g, "teacher", Ui.C_BLUE, "Teacher mode", "Hide patient name and IDs on screen", pref("teacher"), new CompoundButton.OnCheckedChangeListener() {
             public void onCheckedChanged(CompoundButton x, boolean on) { put("teacher", on); }
@@ -124,12 +126,25 @@ public class SettingsActivity extends BaseActivity {
 
     void updateLabels() {
         long bytes = 0;
-        int n = 0;
-        synchronized (Library.class) { for (Library.Study st : Library.studies) { bytes += st.bytes(); n++; } }
+        int studies = 0, series = 0, images = 0;
+        synchronized (Library.class) {
+            for (Library.Study st : Library.studies) {
+                bytes += st.bytes(); studies++;
+                for (Library.Series se : st.series) { series++; images += se.images.size(); }
+            }
+        }
         String ver = "";
-        try { ver = "Version " + getPackageManager().getPackageInfo(getPackageName(), 0).versionName + "\n"; } catch (Exception ignored) { }
-        storage.setText(ver + n + " stud" + (n == 1 ? "y" : "ies") + ", " + Library.fmtSize(bytes) + ", " + AnnStore.count() + " saved measurements");
-        int np = Store.profiles(this).size();
+        int build = 0;
+        try {
+            ver = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+            build = getPackageManager().getPackageInfo(getPackageName(), 0).versionCode;
+        } catch (Exception ignored) { }
+        int np = Store.profiles(this).size(), na = Store.albums(this).size();
+        storage.setText("Version " + ver + " (build " + build + ")\n"
+                + studies + " stud" + (studies == 1 ? "y" : "ies") + ", " + series + " series, " + images + " files\n"
+                + Library.fmtSize(bytes) + " stored, " + AnnStore.count() + " measurements\n"
+                + np + " PACS profile" + (np == 1 ? "" : "s") + ", " + na + " album" + (na == 1 ? "" : "s"));
+        storage.setLineSpacing(0, 1.15f);
         pacsRow.setText(np == 0 ? "No servers yet. Add one for each institution." : np + " server" + (np == 1 ? "" : "s") + " configured");
     }
 

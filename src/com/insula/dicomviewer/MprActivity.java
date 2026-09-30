@@ -54,7 +54,8 @@ public class MprActivity extends BaseActivity implements DicomView.Listener, Dic
     double[] C;
     int slabMode = Volume.THIN, layout = 0, active = 0, maximized = -1, tool = DicomView.T_CROSS, r3mode = 0;
     double slabMm = 10, yaw = 0, pitch = 0;
-    boolean linkWindow = true, updating, fourthIsCpr;
+    boolean linkWindow = true, updating, fourthIsCpr, interactive;
+    final int[] lastStride = new int[3];
     final DicomView[] views = new DicomView[4];
     final FrameLayout[] ports = new FrameLayout[4];
     final TextView[] headers = new TextView[4];
@@ -111,11 +112,11 @@ public class MprActivity extends BaseActivity implements DicomView.Listener, Dic
         }.start();
     }
 
-    @Override public void onBackPressed() {
-        if (drawer != null && drawer.open) { drawer.close(); return; }
-        if (palette != null && palette.getVisibility() == View.VISIBLE) { showPalette(false); return; }
-        if (maximized >= 0) { maximize(-1); return; }
-        super.onBackPressed();
+    @Override protected boolean handleBack() {
+        if (drawer != null && drawer.open) { drawer.close(); return true; }
+        if (palette != null && palette.getVisibility() == View.VISIBLE) { showPalette(false); return true; }
+        if (maximized >= 0) { maximize(-1); return true; }
+        return false;
     }
 
     // ---------------- setup ----------------
@@ -494,6 +495,7 @@ public class MprActivity extends BaseActivity implements DicomView.Listener, Dic
         if (k == 3) { orbit(phase, sx, sy); return; }
         if (tool == DicomView.T_CURVE) { curveTouch(k, phase, ix, iy, sx, sy); return; }
         if (phase == 0) {
+            interactive = true;
             dragMode = pickMode(v, sx, sy);
             if (dragMode == 1) lastAng = angleAt(k, ix, iy);
             else moveCenter(k, ix, iy);
@@ -663,6 +665,14 @@ public class MprActivity extends BaseActivity implements DicomView.Listener, Dic
     }
 
     public void onImageTap(DicomView v, float ix, float iy) { }
+    public void onImageReady(DicomView v) { }
+    public void onLongPressImage(DicomView v) { presets(); }
+    public void onInteractionEnd(DicomView v) {
+        int k = indexOf(v);
+        if (k < 0 || k > 2) return;
+        if (interactive) { interactive = false; refreshPlanes(); }
+        else if (lastStride[k] > 1) { updating = true; v.refresh(); updating = false; }
+    }
 
     public void onSelection(DicomView v, DicomView.Ann a) { if (mbar != null) mbar.onSelection(v, a); }
 
@@ -842,6 +852,9 @@ public class MprActivity extends BaseActivity implements DicomView.Listener, Dic
         public Set<Integer> keyImages() { return keys; }
         public Library.SliceRef ref(int i) { return null; }
         public int seriesNumber() { return series.number; }
+        public boolean async() { return false; }
+        public RawImage peek(int i) { return null; }
+        public void load(int i, Library.Done cb) { }
     }
 
     final class PlaneProv extends Base {
@@ -857,7 +870,12 @@ public class MprActivity extends BaseActivity implements DicomView.Listener, Dic
             double[] p = Volume.add(C, Volume.mul(n, t(i) - Volume.dot(C, n)));
             return vol.planeThrough(p, U[k], V[k], MAXPX);
         }
-        public RawImage image(int i) { return vol.reslice(plane(i), slabMm, slabMode); }
+        public RawImage image(int i) {
+            // Half-resolution sampling while a finger is moving; full quality when it lifts.
+            int stride = (interactive || views[k].touching || views[k].interacting) ? 2 : 1;
+            lastStride[k] = stride;
+            return vol.reslice(plane(i), slabMm, slabMode, stride);
+        }
         public double[] orientation(int i) { return new double[]{U[k][0], U[k][1], U[k][2], V[k][0], V[k][1], V[k][2]}; }
         public String seriesName() { return headers[k].getText().toString(); }
         public String sliceInfo(int i) {

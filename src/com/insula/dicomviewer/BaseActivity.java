@@ -37,8 +37,35 @@ public class BaseActivity extends Activity {
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
         if (Ui.prefs(this).getBoolean("secure", false)) getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
-        getWindow().setStatusBarColor(Ui.CHROME);
-        getWindow().setNavigationBarColor(Ui.CHROME);
+        Compat.edgeToEdge(this);
+        Compat.registerBack(this, new Runnable() { public void run() { if (!handleBack()) defaultBack(); } });
+    }
+
+    /** Screens override this to close panels, sheets, or modes first. Return true if Back was used. */
+    protected boolean handleBack() { return false; }
+
+    /** Android 13 to 15 (and older) still deliver Back here. */
+    @Override public void onBackPressed() { if (!handleBack()) super.onBackPressed(); }
+
+    /** What Back does when nothing on screen needs it (Android 16+ path). */
+    void defaultBack() {
+        if (isTaskRoot()) moveTaskToBack(true); else finish();
+    }
+
+    /** Wraps every screen so its content sits clear of the status bar, navigation bar, cutouts, and keyboard. */
+    @Override public void setContentView(android.view.View v) {
+        android.widget.FrameLayout shell = new android.widget.FrameLayout(this);
+        shell.setBackgroundColor(Ui.BAR);
+        shell.addView(v, new android.widget.FrameLayout.LayoutParams(-1, -1));
+        shell.setOnApplyWindowInsetsListener(new android.view.View.OnApplyWindowInsetsListener() {
+            public android.view.WindowInsets onApplyWindowInsets(android.view.View view, android.view.WindowInsets in) {
+                int[] i = Compat.insets(in);
+                view.setPadding(i[0], i[1], i[2], i[3]);
+                return in;
+            }
+        });
+        super.setContentView(shell);
+        shell.requestApplyInsets();
     }
 
     @Override protected void onResume() {

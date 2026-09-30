@@ -56,7 +56,7 @@ GitHub Actions builds, tests, signs, and attaches the APK to a GitHub Release. W
 
 | Requirement | Status |
 |---|---|
-| Target API level 36 (required for new apps and updates since 31 August 2026) | **To do.** Needs Google's Android SDK instead of Ubuntu's API 23 jar, predictive back (Android 16 no longer calls `onBackPressed` for apps targeting API 36), and edge-to-edge layouts |
+| Target API level 36 (required for new apps and updates since 31 August 2026) | **Done in 1.7.0.** See [PLAY_COMPLIANCE.md](PLAY_COMPLIANCE.md) |
 | Android App Bundle (.aab) | **To do.** The build currently produces an APK |
 | Play App Signing | Enrol when creating the app |
 | Privacy policy URL | `docs/PRIVACY.md` via GitHub Pages |

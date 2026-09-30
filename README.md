@@ -2,7 +2,7 @@
 
 [![Build and test](https://github.com/jemishmayani/Insula-DICOM-Viewer/actions/workflows/ci.yml/badge.svg)](https://github.com/jemishmayani/Insula-DICOM-Viewer/actions/workflows/ci.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
-![Android 7.0+](https://img.shields.io/badge/Android-7.0%2B-3ddc84.svg)
+![Android 7.0+](https://img.shields.io/badge/Android-7.0%2B-3ddc84.svg) ![Targets Android 16](https://img.shields.io/badge/targets-Android%2016%20(API%2036)-3ddc84.svg)
 
 A fast, private DICOM viewer for Android phones and tablets: open studies from files, patient CDs, and hospital PACS; read them with measurement tools; reconstruct them in MPR and 3D; and share anonymized copies.
 
@@ -22,6 +22,7 @@ A fast, private DICOM viewer for Android phones and tablets: open studies from f
 | [DICOM conformance statement](docs/DICOM_CONFORMANCE.md) | Hospital IT and PACS administrators |
 | [Verification and validation](docs/VALIDATION.md) | Anyone assessing quality |
 | [Architecture](docs/ARCHITECTURE.md) | Developers |
+| [Google Play and Android compliance](docs/PLAY_COMPLIANCE.md) | Maintainer: API 36, edge-to-edge, predictive back, Android 17 readiness |
 | [Releasing](docs/RELEASING.md) | Maintainer: builds, signing, Google Play checklist |
 | [Changelog](CHANGELOG.md) · [Security](SECURITY.md) · [Third-party notices](THIRD_PARTY_NOTICES.md) | |
 
@@ -33,6 +34,9 @@ A fast, private DICOM viewer for Android phones and tablets: open studies from f
 - Search, sort, albums (teaching files, follow-ups), and a transfer log with sizes, speeds, and errors
 
 **Viewer**
+- Smooth scrolling (background decoding, direction-aware prefetch), flick to glide, a scrub bar, and long-press presets
+- One-tap quick bar; side-by-side comparison with prior studies and linked scrolling across studies
+- Remembered window settings per series; a synthetic demo study and welcome screen for first use
 - Window/level with CT presets, zoom, pan, rotate, flip, invert
 - One to four viewports with linked scrolling and cross-reference lines
 - Cine loop from 1 to 60 fps

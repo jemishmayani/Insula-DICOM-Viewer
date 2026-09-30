@@ -1,6 +1,6 @@
 # User guide
 
-*Insula DICOM Viewer 1.6.0*
+*Insula DICOM Viewer 1.7.0*
 
 The same information is in the app under **Settings › Guide**, with search. Long-press any icon in the app to see its name.
 
@@ -13,8 +13,10 @@ The same information is in the app under **Settings › Guide**, with search. Lo
 ## 1. Getting started
 
 1. Download the latest APK from [Releases](https://github.com/jemishmayani/Insula-DICOM-Viewer/releases) and open it. Allow installing from that source if Android asks.
-2. On first launch, read and accept the disclaimer.
-3. Tap the blue **+** button to import your first study.
+2. On first launch, the welcome screen explains what Insula does. Tick the box confirming that it isn't for primary diagnosis.
+3. Choose **Explore with a demo study** to try every tool on a synthetic CT head phantom (a prior and a current study, no real patient), or **Import my own studies**.
+
+Later, an empty home screen offers the same choices: Import studies, Search a hospital PACS, or Try the demo study.
 
 Requires Android 7.0 or newer. Tablets and landscape orientation are supported.
 
@@ -49,11 +51,15 @@ You can also share DICOM or ZIP files to Insula from other apps. Duplicates, ide
 
 ### Layout of the screen
 
-- **Top bar:** Back, patient name with age/sex, **Share**, **Study details**, and **Tools menu**.
+- **Top bar:** Back, patient name with age/sex (tap it for study details), **Share**, and **Tools menu**.
 - **Viewport:** the image, with the **series name** (tap to change series) at the top left and the **pencil** (measure and annotate) at the top right.
 - **Corners:** WL and WW (window level and width), SE (series number), and IM (image number of total). The slice location and thickness appear above WL.
 - **Edges:** orientation letters (A anterior, P posterior, R right, L left, H head, F feet). They follow rotation and flipping.
+- **Quick bar:** one tap each for Scroll, Window, Measure, Presets, Play, Compare, Layout, Link and Align (with two or more viewports), Reset, and More (the full tools menu).
 - **Thumbnail strip:** the study's series with image counts. Tap to show a series in the selected viewport; long-press for MPR, DICOM tags, or anonymized export.
+- **Scrub bar:** the thin line along the right edge. Drag it to jump anywhere in the series.
+
+A tips card appears the first time you open the viewer.
 
 ### Gestures
 
@@ -63,6 +69,11 @@ You can also share DICOM or ZIP files to Insula from other apps. Duplicates, ide
 | Two-finger drag | Pan |
 | Double tap | Fit the image to the viewport |
 | One-finger drag | Follows the selected tool: scroll, window, or measure |
+| Flick (Scroll tool) | Keeps scrolling and slows down on its own; touch to stop |
+| Drag along the right edge | Jumps through the series |
+| Long-press (Scroll, Window, or Pan tool) | Window presets |
+
+Slices load in the background, so scrolling never pauses for a slow image: the previous slice stays until the next is ready, and the app reads ahead in the direction you're scrolling.
 
 ### Tools menu
 
@@ -80,7 +91,15 @@ You can also share DICOM or ZIP files to Insula from other apps. Duplicates, ide
 | DICOM tags | Lists every attribute of the current image, with search |
 | Reset | Resets zoom, pan, rotation, flips, inversion, and window |
 
+**Remembered window settings.** When you change brightness or contrast (Window tool or a preset), the setting is saved for that series and used the next time you open it. **Reset** forgets it. Turn this off in Settings › Viewer.
+
 **Window presets:** Brain (W 80 / L 40), Subdural (215/75), Stroke (40/40), Temporal bone (2800/600), Lung (1500/−600), Mediastinum (350/50), Abdomen (400/40), Liver (150/60), Bone (1800/400), Angio (600/300), plus the file's default and full range.
+
+### Comparing with a prior study
+
+Tap **Compare** in the quick bar. Insula lists the other studies of the same patient (same Patient ID) and shows the chosen one side by side, with the series that best matches the current one (same modality, plane, and description). Its header shows the study date in amber.
+
+Scrolling is linked. Within one study, positions match exactly. Across studies, the stacks are first lined up by their centres; if the anatomy doesn't match, scroll either side to the same level and tap **Align**. From then on, both scroll together from there.
 
 ## 4. Measuring and annotating
 
@@ -161,7 +180,7 @@ Search by patient name (a trailing `*` is added automatically), patient ID, date
 
 | Group | Settings |
 |---|---|
-| Viewer | Default loop speed (1–60 fps), Teacher mode |
+| Viewer | Default loop speed (1–60 fps), Remember window settings, Teacher mode |
 | Privacy and security | App lock, Block screenshots, Hide patient details in exports |
 | PACS | PACS profiles |
 | Backup and transfer | Export/import settings; export/import study sets |
@@ -171,9 +190,13 @@ Search by patient name (a trailing `*` is added automatically), patient ID, date
 - **Settings file (.json):** preferences, albums, and PACS profiles, for moving to a new phone. PACS passwords are included only if you protect them with a passphrase.
 - **Study set (.zip):** DICOM files with their measurements, key images, and albums. Importing a set also creates an album with its name. Study sets open in any DICOM viewer; the extra data is used by Insula.
 
+The card at the top of Settings shows the version and your library: studies, series, files, storage used, measurements, PACS profiles, and albums.
+
+The in-app **Guide** (Settings › Guide) groups every tool into collapsible sections. Tap a section to open it, or use Expand all. Searching opens the sections with matches and shows only matching tools.
+
 ### About Insula
 
-Open **Settings › About Insula**, or tap the card at the top of Settings. It shows the version and has **Check for updates**, the medical-use disclaimer, links (in-app guide, online user guide, source code, all releases, report a problem, privacy policy), the full licence texts (GNU GPL v3, the NOTICE with the JJ2000 permission, and JJ2000's licence), and developer contact details. **Copy app and device info** copies your version, Android version, and phone model for bug reports.
+Open **Settings › About Insula**. It shows the version and has **Check for updates**, the medical-use disclaimer, links (in-app guide, online user guide, source code, all releases, report a problem, privacy policy), the full licence texts (GNU GPL v3, the NOTICE with the JJ2000 permission, and JJ2000's licence), and developer contact details. **Copy app and device info** copies your version, Android version, and phone model for bug reports.
 
 ### Updating the app
 

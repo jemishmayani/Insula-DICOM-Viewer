@@ -6,6 +6,7 @@
  */
 package com.insula.dicomviewer;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -141,7 +142,14 @@ final class Volume {
         return pl;
     }
 
-    RawImage reslice(final Plane pl, double thickness, final int mode) {
+    RawImage reslice(final Plane pl, double thickness, final int mode) { return reslice(pl, thickness, mode, 1); }
+
+    /**
+     * stride > 1 computes every stride-th sample and repeats it, for fast previews while the user drags.
+     * The image keeps its full size and pixel spacing, so overlays and measurements stay in place.
+     */
+    RawImage reslice(final Plane pl, double thickness, final int mode, int strideIn) {
+        final int stride = Math.max(1, strideIn);
         final RawImage im = new RawImage();
         im.w = pl.w; im.h = pl.h; im.rowSp = pl.s; im.colSp = pl.s;
         im.pix = new int[pl.w * pl.h];
@@ -149,13 +157,14 @@ final class Volume {
         final int ns = mode == THIN || thickness <= minSp ? 1 : Math.min(96, (int) Math.round(thickness / minSp) + 1);
         final double[] dn = dirVoxel(mul(pl.n, ns > 1 ? thickness / (ns - 1) : 0));
         final double half = (ns - 1) / 2.0;
-        parallelRows(pl.h, new RowTask() {
-            public void rows(int y0, int y1) {
-                for (int y = y0; y < y1; y++) {
-                    double bx = v0[0] + y * dv[0], by = v0[1] + y * dv[1], bz = v0[2] + y * dv[2];
-                    int o = y * pl.w;
-                    for (int x = 0; x < pl.w; x++) {
-                        double px = bx + x * du[0], py = by + x * du[1], pz = bz + x * du[2];
+        final int blocksY = (pl.h + stride - 1) / stride;
+        parallelRows(blocksY, new RowTask() {
+            public void rows(int b0, int b1) {
+                for (int by = b0; by < b1; by++) {
+                    int y = by * stride;
+                    double bx = v0[0] + y * dv[0], byy = v0[1] + y * dv[1], bz = v0[2] + y * dv[2];
+                    for (int x = 0; x < pl.w; x += stride) {
+                        double px = bx + x * du[0], py = byy + x * du[1], pz = bz + x * du[2];
                         float val;
                         if (ns == 1) val = tri(px, py, pz);
                         else {
@@ -167,7 +176,9 @@ final class Volume {
                             }
                             val = mode == AVG ? acc / ns : acc;
                         }
-                        im.pix[o + x] = Math.round(val);
+                        int v = Math.round(val);
+                        int ye = Math.min(pl.h, y + stride), xe = Math.min(pl.w, x + stride);
+                        for (int yy = y; yy < ye; yy++) { int o = yy * pl.w; for (int xx = x; xx < xe; xx++) im.pix[o + xx] = v; }
                     }
                 }
             }
@@ -370,23 +381,65 @@ final class Volume {
         while ((long) (w / ds) * (h / ds) * nz * 2 > budget && ds < 8) ds *= 2;
         int nx = w / ds, ny = h / ds;
         double sx = (g0.colSp > 0 ? g0.colSp : 1) * ds, sy = (g0.rowSp > 0 ? g0.rowSp : 1) * ds;
-        short[] vol = new short[nx * ny * nz];
-        double wc = Double.NaN, ww = Double.NaN;
-        String units = "";
+        final short[] vol = new short[nx * ny * nz];
+        final double[] wcw = {Double.NaN, Double.NaN};
+        final String[] unitsOut = {""};
+        // Group volume slices by file so each file is read and parsed once, then decode files in parallel.
+        java.util.LinkedHashMap<File, List<int[]>> byFile = new java.util.LinkedHashMap<>();
         for (int k = 0; k < nz; k++) {
-            RawImage im = Library.load(sl.get(k));
-            if (im.rgb) throw new Exception("MPR works on grayscale series only.");
-            if (k == nz / 2) { double[] dw = im.defaultWindow(); wc = dw[0]; ww = dw[1]; units = im.units; }
-            int base = k * nx * ny;
-            for (int y = 0; y < ny; y++) {
-                int row = (y * ds) * im.w;
-                for (int x = 0; x < nx; x++) {
-                    double v = im.pix[row + x * ds] * im.slope + im.intercept;
-                    vol[base + y * nx + x] = (short) Math.max(-32768, Math.min(32767, Math.round(v)));
-                }
-            }
-            if (prog != null && k % 8 == 0) prog.update(k, nz, "Building volume");
+            Library.SliceRef s = sl.get(k);
+            List<int[]> l = byFile.get(s.info.file);
+            if (l == null) { l = new ArrayList<>(); byFile.put(s.info.file, l); }
+            l.add(new int[]{k, k});
         }
+        final java.util.concurrent.atomic.AtomicInteger done = new java.util.concurrent.atomic.AtomicInteger();
+        final String[] failure = {null};
+        final int fnx = nx, fny = ny, fds = ds, fnz = nz;
+        final List<Library.SliceRef> fsl = sl;
+        final Library.Progress fprog = prog;
+        List<Callable<Void>> jobs = new ArrayList<>();
+        for (final java.util.Map.Entry<File, List<int[]>> e : byFile.entrySet()) {
+            jobs.add(new Callable<Void>() {
+                public Void call() {
+                    try {
+                        Dicom.DataSet dset = Dicom.parse(Library.readFile(e.getKey()));
+                        for (int[] kk : e.getValue()) {
+                            if (failure[0] != null) return null;
+                            Library.SliceRef s = fsl.get(kk[1]);
+                            RawImage im = PixelDecoder.decode(dset, s.frame);
+                            if (im.rgb) { failure[0] = "MPR works on grayscale series only."; return null; }
+                            Library.Geo g = s.geo();
+                            double slope = g.slope, icpt = g.intercept;
+                            if (kk[0] == fnz / 2) {
+                                im.slope = slope; im.intercept = icpt; im.wc = g.wc; im.ww = g.ww; im.computeRange();
+                                double[] dw = im.defaultWindow();
+                                wcw[0] = dw[0]; wcw[1] = dw[1];
+                                unitsOut[0] = "CT".equals(s.info.modality) ? "HU" : "";
+                            }
+                            int base = kk[0] * fnx * fny;
+                            for (int y = 0; y < fny; y++) {
+                                int row = (y * fds) * im.w;
+                                for (int x = 0; x < fnx; x++) {
+                                    double v = im.pix[row + x * fds] * slope + icpt;
+                                    vol[base + y * fnx + x] = (short) Math.max(-32768, Math.min(32767, Math.round(v)));
+                                }
+                            }
+                            int d = done.incrementAndGet();
+                            if (fprog != null && d % 8 == 0) fprog.update(d, fnz, "Building volume");
+                        }
+                    } catch (OutOfMemoryError oom) {
+                        failure[0] = "Not enough memory to build this volume.";
+                    } catch (Throwable t) {
+                        failure[0] = "Couldn't read a slice: " + t.getMessage();
+                    }
+                    return null;
+                }
+            });
+        }
+        try { POOL.invokeAll(jobs); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+        if (failure[0] != null) throw new Exception(failure[0]);
+        double wc = wcw[0], ww = wcw[1];
+        String units = unitsOut[0];
         double[] O = g0.pos.clone();
         Volume v = new Volume(vol, nx, ny, nz, O, mul(r, sx), mul(c, sy), slab);
         v.defWc = wc; v.defWw = ww; v.units = units;

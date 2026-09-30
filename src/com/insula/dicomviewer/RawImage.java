@@ -41,23 +41,56 @@ public final class RawImage {
     public double value(int x, int y) { return pix[y * w + x] * slope + intercept; }
     public long bytes() { return (long) w * h * 4 + 64; }
 
-    public void render(int[] out, double c, double width, boolean invert) {
-        int n = w * h;
+    public void render(int[] out, double c, double width, boolean invert) { render(out, c, width, invert, 1); }
+
+    /**
+     * Maps stored values to ARGB through the window. step > 1 renders a (w/step) x (h/step) preview by sampling.
+     * Large images are split across CPU cores.
+     */
+    public void render(final int[] out, double c, double width, boolean invert, final int step) {
+        final int ow = Math.max(1, w / step), oh = Math.max(1, h / step);
         if (rgb) {
-            for (int i = 0; i < n; i++) { int p = pix[i]; out[i] = invert ? (0xFF000000 | (~p & 0xFFFFFF)) : (p | 0xFF000000); }
+            final boolean inv = invert;
+            Volume.RowTask t = new Volume.RowTask() {
+                public void rows(int y0, int y1) {
+                    for (int y = y0; y < y1; y++) {
+                        int so = y * step * w, o = y * ow;
+                        for (int x = 0; x < ow; x++) { int p = pix[so + x * step]; out[o + x] = inv ? (0xFF000000 | (~p & 0xFFFFFF)) : (p | 0xFF000000); }
+                    }
+                }
+            };
+            if ((long) ow * oh > 250000) Volume.parallelRows(oh, t); else t.rows(0, oh);
             return;
         }
-        boolean inv = invert ^ mono1;
-        double ww2 = Math.max(1, width);
-        double lo = c - 0.5 - (ww2 - 1) / 2, hi = c - 0.5 + (ww2 - 1) / 2;
+        final boolean inv = invert ^ mono1;
+        final double ww2 = Math.max(1, width);
+        final double lo = c - 0.5 - (ww2 - 1) / 2, hi = c - 0.5 + (ww2 - 1) / 2, cc = c;
         long range = (long) max - min + 1;
+        Volume.RowTask t;
         if (range > 0 && range <= (1 << 20)) {
-            int[] lut = new int[(int) range];
+            final int[] lut = new int[(int) range];
             for (int i = 0; i < range; i++) lut[i] = gray((min + i) * slope + intercept, c, ww2, lo, hi, inv);
-            for (int i = 0; i < n; i++) out[i] = lut[pix[i] - min];
+            final int mn = min;
+            t = new Volume.RowTask() {
+                public void rows(int y0, int y1) {
+                    for (int y = y0; y < y1; y++) {
+                        int so = y * step * w, o = y * ow;
+                        if (step == 1) for (int x = 0; x < ow; x++) out[o + x] = lut[pix[so + x] - mn];
+                        else for (int x = 0; x < ow; x++) out[o + x] = lut[pix[so + x * step] - mn];
+                    }
+                }
+            };
         } else {
-            for (int i = 0; i < n; i++) out[i] = gray(pix[i] * slope + intercept, c, ww2, lo, hi, inv);
+            t = new Volume.RowTask() {
+                public void rows(int y0, int y1) {
+                    for (int y = y0; y < y1; y++) {
+                        int so = y * step * w, o = y * ow;
+                        for (int x = 0; x < ow; x++) out[o + x] = gray(pix[so + x * step] * slope + intercept, cc, ww2, lo, hi, inv);
+                    }
+                }
+            };
         }
+        if ((long) ow * oh > 250000) Volume.parallelRows(oh, t); else t.rows(0, oh);
     }
 
     static int gray(double v, double c, double w, double lo, double hi, boolean inv) {

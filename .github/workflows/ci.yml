@@ -73,6 +73,7 @@ jobs:
             tests/.work/vrt/compare_*.png
             tests/.work/vrt/gpu_result.txt
           if-no-files-found: ignore
+          include-hidden-files: true   # tests/.work is a hidden folder, which upload-artifact v4 skips by default
 
       - name: Attach APK to release
         # Only publish releases signed with your own key, so users can install updates over them.

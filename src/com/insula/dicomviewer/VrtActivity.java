@@ -10,6 +10,7 @@ import android.app.ActivityManager;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.content.pm.ConfigurationInfo;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -97,7 +98,7 @@ public class VrtActivity extends BaseActivity implements GlVrt.Host {
         top.addView(Ui.icon(this, "back", new View.OnClickListener() { public void onClick(View v) { finish(); } }));
         LinearLayout tc = Ui.col(this);
         tc.setPadding(Ui.dp(this, 12), 0, Ui.dp(this, 4), 0);
-        TextView t = Ui.title(this, "3D VRT");
+        TextView t = Ui.title(this, "3D VRT  \u00b7  Beta");
         tc.addView(t);
         TextView sub = Ui.text(this, series.label(), 12.5f, Ui.SUB);
         sub.setSingleLine(true);
@@ -232,6 +233,7 @@ public class VrtActivity extends BaseActivity implements GlVrt.Host {
     }
 
     void afterFirstBuild() {
+        betaNotice();
         final List<VrtStore.Saved> saved = VrtStore.states(series);
         if (!Ui.prefs(this).getBoolean("vrt_help_v1", false)) { help(); Ui.prefs(this).edit().putBoolean("vrt_help_v1", true).apply(); }
         else if (tier >= 2) Ui.toast(this, TIER_HELP[tier]);
@@ -277,6 +279,24 @@ public class VrtActivity extends BaseActivity implements GlVrt.Host {
                 });
             }
         });
+    }
+
+    /** Shown once: what "beta" means for 3D VRT, how to correct results, and where to report problems. */
+    void betaNotice() {
+        if (Ui.prefs(this).getBoolean("vrt_beta_seen", false)) return;
+        Ui.prefs(this).edit().putBoolean("vrt_beta_seen", true).apply();
+        new AlertDialog.Builder(this).setTitle("3D VRT is in beta")
+                .setMessage("Automatic tissue separation is rule-based and won't always be right. It can, for example, leave parts of the "
+                        + "table, colour dense contrast in veins as bone, or merge organs that touch.\n\n"
+                        + "Use Tissues, Pick, Cut, and Clip to correct the view; Undo reverses any step. 3D views are for orientation and "
+                        + "communication, not diagnosis.\n\nScreenshots of problems help improve it: About \u203a Report a problem.")
+                .setPositiveButton("OK", null)
+                .setNeutralButton("Report a problem", new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface d, int w) {
+                        App.external = true;
+                        try { startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(Updates.REPO_URL + "/issues/new/choose"))); } catch (Exception ignored) { }
+                    }
+                }).show();
     }
 
     void attach() {
@@ -1106,7 +1126,7 @@ public class VrtActivity extends BaseActivity implements GlVrt.Host {
                 + "Automatic separation is designed for contrast CT (for example coronary CTA). It separates tissue types, not individual organs, and can mislabel structures such as dense contrast in veins or unusual anatomy: check the result and correct it with Pick and Cut. MR and other scans use simple intensity bands.\n\n"
                 + "This phone: " + TIER_HELP[tier] + (tier != autoTier ? " (Recommended here: " + Vol3D.TIER_NAMES[autoTier] + ".)" : "")
                 + "\n\nNot for primary diagnosis.";
-        new AlertDialog.Builder(this).setTitle("3D VRT").setMessage(s).setPositiveButton("OK", null).show();
+        new AlertDialog.Builder(this).setTitle("3D VRT (Beta)").setMessage(s).setPositiveButton("OK", null).show();
     }
 
     @Override protected boolean handleBack() {

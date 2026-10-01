@@ -143,7 +143,7 @@ final class StudyType {
                 p.groups.add(new Group("CVJ measurements").add("short", "adi", "ADI", "length").add("short", "bdi", "BDI", "length")
                         .add("short", "chamberlain", "Chamberlain", "ptline").add("short", "mcgregor", "McGregor", "ptline"));
                 p.groups.add(new Group("Measurements").add("tool", "length", "Distance", "length").add("tool", "angle", "Angle", "angle").add("short", "canal-c", "Canal AP", "length"));
-                p.groups.add(new Group("3D").add("3d", "bone", "Bone", "cube"));
+                p.groups.add(new Group("3D (Beta)").add("3d", "bone", "Bone", "cube"));
                 break;
             case C_SPINE:
                 p.groups.add(windows(type));
@@ -152,25 +152,25 @@ final class StudyType {
                         .add("short", "canal-c", "Canal AP", "length").add("short", "height", "Body height", "length"));
                 p.groups.add(new Group("CVJ").add("short", "adi", "ADI", "length").add("short", "bdi", "BDI", "length")
                         .add("short", "chamberlain", "Chamberlain", "ptline").add("short", "mcgregor", "McGregor", "ptline"));
-                p.groups.add(new Group("3D").add("3d", "bone", "Bone", "cube"));
+                p.groups.add(new Group("3D (Beta)").add("3d", "bone", "Bone", "cube"));
                 break;
             case SPINE:
                 p.groups.add(windows(type));
                 p.groups.add(mpr("Sagittal", "Coronal", "Axial"));
                 p.groups.add(new Group("Measurements").add("tool", "length", "Distance", "length").add("tool", "angle", "Angle", "angle").add("short", "cobb", "Cobb", "cobb")
                         .add("short", "canal-l", "Canal AP", "length").add("short", "height", "Body height", "length"));
-                p.groups.add(new Group("3D").add("3d", "bone", "Bone", "cube"));
+                p.groups.add(new Group("3D (Beta)").add("3d", "bone", "Bone", "cube"));
                 break;
             case BRAIN:
                 p.groups.add(windows(type));
                 p.groups.add(mpr("Axial", "Coronal", "Sagittal"));
                 p.groups.add(new Group("Quick").add("short", "midline", "Midline shift", "ptline").add("short", "abc", "Hematoma (ABC/2)", "abc").add("tool", "length", "Distance", "length")
                         .add("tool", "ellipse", "Density (HU)", "ellipse"));
-                p.groups.add(new Group("3D").add("3d", "bone", "Skull", "cube"));
+                p.groups.add(new Group("3D (Beta)").add("3d", "bone", "Skull", "cube"));
                 break;
             case CARDIAC_CTA: case CTA: case CTPA:
                 p.groups.add(new Group(CTPA.equals(type) ? "CTPA" : "CTA").add("slab", "mip:20", "MIP", "mip").add("slab", "minip:10", "MinIP", "minip")
-                        .add("slab", "mip:5", "Thin MIP", "mip").add("3d", CARDIAC_CTA.equals(type) ? "coronary" : "vessels", "3D", "cube"));
+                        .add("slab", "mip:5", "Thin MIP", "mip").add("3d", CARDIAC_CTA.equals(type) ? "coronary" : "vessels", "3D (Beta)", "cube"));
                 p.groups.add(windows(type));
                 p.groups.add(mpr("Axial", "Coronal", "Sagittal"));
                 p.groups.add(new Group("Measurements").add("tool", "length", "Diameter", "length").add("tool", "ellipse", "Density (HU)", "ellipse").add("tool", "angle", "Angle", "angle"));
@@ -179,7 +179,7 @@ final class StudyType {
                 p.groups.add(windows(type));
                 p.groups.add(mpr("Axial", "Coronal", "Sagittal"));
                 p.groups.add(new Group("Measurements").add("tool", "length", "Distance", "length").add("tool", "angle", "Angle", "angle").add("tool", "ellipse", "Density (HU)", "ellipse"));
-                p.groups.add(new Group("3D").add("3d", "bone", "Bone", "cube"));
+                p.groups.add(new Group("3D (Beta)").add("3d", "bone", "Bone", "cube"));
                 break;
             case CHEST:
                 p.groups.add(windows(type));
@@ -191,12 +191,12 @@ final class StudyType {
                 if (p.ct) p.groups.add(windows(type));
                 p.groups.add(mpr("Axial", "Coronal", "Sagittal"));
                 p.groups.add(new Group("Measurements").add("tool", "length", "Distance", "length").add("tool", "angle", "Angle", "angle").add("tool", "ellipse", "Density", "ellipse"));
-                if (p.ct) p.groups.add(new Group("3D").add("3d", "bone", "Bone", "cube").add("3d", "all", "All tissues", "cube"));
+                if (p.ct) p.groups.add(new Group("3D (Beta)").add("3d", "bone", "Bone", "cube").add("3d", "all", "All tissues", "cube"));
         }
         if (!p.ct) {
             // CT windows are in Hounsfield units and 3D presets assume CT densities, so neither applies to MR.
             java.util.Iterator<Group> it = p.groups.iterator();
-            while (it.hasNext()) { String t = it.next().title; if (t.equals("Windows") || t.equals("3D")) it.remove(); }
+            while (it.hasNext()) { String t = it.next().title; if (t.equals("Windows") || t.startsWith("3D")) it.remove(); }
             // MR has no Hounsfield units: the region tool measures signal instead.
             for (Group g : p.groups)
                 for (int i = 0; i < g.tools.size(); i++) {

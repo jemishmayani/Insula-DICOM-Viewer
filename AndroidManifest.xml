@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.insula.dicomviewer" android:versionCode="15" android:versionName="1.9.1">
+    package="com.insula.dicomviewer" android:versionCode="16" android:versionName="1.9.2">
     <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="36"/>
     <!-- OpenGL ES 3.0 is used for 3D rendering when present; phones without it use the CPU renderer. -->
     <uses-feature android:glEsVersion="0x00020000" android:required="true"/>

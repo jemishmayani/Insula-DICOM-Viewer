@@ -51,17 +51,17 @@ public class SmartToolsTest {
         List<String> cs = labels(StudyType.profile(StudyType.C_SPINE, "CT"));
         check("cervical spine: Bone, Soft tissue, Spine windows", cs.containsAll(Arrays.asList("Windows:Bone", "Windows:Soft tissue", "Windows:Spine")), "");
         check("cervical spine: Sagittal, Coronal, Axial MPR", cs.containsAll(Arrays.asList("MPR:Sagittal", "MPR:Coronal", "MPR:Axial")), "");
-        check("cervical spine: Distance, Angle, Cobb, and 3D Bone", cs.containsAll(Arrays.asList("Measurements:Distance", "Measurements:Angle", "Measurements:Cobb", "3D:Bone")), "");
+        check("cervical spine: Distance, Angle, Cobb, and 3D Bone", cs.containsAll(Arrays.asList("Measurements:Distance", "Measurements:Angle", "Measurements:Cobb", "3D (Beta):Bone")), "");
         check("cervical spine: CVJ shortcuts", cs.containsAll(Arrays.asList("CVJ:ADI", "CVJ:BDI", "CVJ:Chamberlain", "CVJ:McGregor")), "");
         List<String> br = labels(StudyType.profile(StudyType.BRAIN, "CT"));
         check("brain: Brain, Subdural, Bone, Stroke windows", br.containsAll(Arrays.asList("Windows:Brain", "Windows:Subdural", "Windows:Bone", "Windows:Stroke")), "");
         check("brain: Midline shift, Hematoma, Distance", br.containsAll(Arrays.asList("Quick:Midline shift", "Quick:Hematoma (ABC/2)", "Quick:Distance")), "");
         List<String> mr = labels(StudyType.profile(StudyType.BRAIN, "MR"));
         boolean noCtTools = true;
-        for (String l : mr) if (l.startsWith("Windows:") || l.startsWith("3D:")) noCtTools = false;
+        for (String l : mr) if (l.startsWith("Windows:") || l.startsWith("3D")) noCtTools = false;
         check("MR brain: no CT windows or 3D skull, but MPR and measurements", noCtTools && mr.contains("MPR:Axial") && mr.contains("Quick:Midline shift") && mr.contains("Quick:Signal (ROI)") && !mr.toString().contains("(HU)"), mr.toString());
         List<String> cta = labels(StudyType.profile(StudyType.CTA, "CT"));
-        check("CTA: MIP, MinIP, Thin MIP, 3D", cta.containsAll(Arrays.asList("CTA:MIP", "CTA:MinIP", "CTA:Thin MIP", "CTA:3D")), "");
+        check("CTA: MIP, MinIP, Thin MIP, 3D", cta.containsAll(Arrays.asList("CTA:MIP", "CTA:MinIP", "CTA:Thin MIP", "CTA:3D (Beta)")), "");
         boolean presetsExist = true, shortcutsExist = true;
         for (String t : new String[]{StudyType.CARDIAC_CTA, StudyType.CTPA, StudyType.CTA, StudyType.TRAUMA, StudyType.CVJ, StudyType.C_SPINE, StudyType.SPINE,
                 StudyType.BRAIN, StudyType.NECK, StudyType.CHEST, StudyType.ABDOMEN, StudyType.GENERAL}) {

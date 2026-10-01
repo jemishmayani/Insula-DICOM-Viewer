@@ -1,8 +1,17 @@
-# Insula DICOM Viewer
+<p align="center">
+  <img src="docs/assets/insula-logo-256.png" width="128" alt="Insula DICOM Viewer logo: three stacked image slices showing an axial brain">
+</p>
 
-[![Build and test](https://github.com/jemishmayani/Insula-DICOM-Viewer/actions/workflows/ci.yml/badge.svg)](https://github.com/jemishmayani/Insula-DICOM-Viewer/actions/workflows/ci.yml)
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
-![Android 7.0+](https://img.shields.io/badge/Android-7.0%2B-3ddc84.svg) ![Targets Android 16](https://img.shields.io/badge/targets-Android%2016%20(API%2036)-3ddc84.svg)
+<h1 align="center">Insula DICOM Viewer</h1>
+
+<p align="center">Free, open-source DICOM viewer for Android. Your images stay on your phone.</p>
+
+<p align="center">
+
+[![Build and test](https://github.com/jemishmayani/Insula-DICOM-Viewer/actions/workflows/ci.yml/badge.svg)](https://github.com/jemishmayani/Insula-DICOM-Viewer/actions/workflows/ci.yml) [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE) ![Android 7.0+](https://img.shields.io/badge/Android-7.0%2B-3ddc84.svg) ![Targets Android 16](https://img.shields.io/badge/targets-Android%2016%20(API%2036)-3ddc84.svg)
+
+</p>
+
 
 A fast, private DICOM viewer for Android phones and tablets: open studies from files, patient CDs, and hospital PACS; read them with measurement tools; reconstruct them in MPR and 3D; and share anonymized copies.
 
@@ -11,6 +20,10 @@ A fast, private DICOM viewer for Android phones and tablets: open studies from f
 - Android 7.0 (API 24) and newer
 - No Gradle, no third-party Android libraries, no ads, no analytics
 - Images stay in app-private storage; nothing leaves the phone unless you share it or connect to a server
+
+## Brand assets
+
+The logo (SVG, with and without its teal background) and the GitHub social preview are in [`docs/assets`](docs/assets).
 
 ## Documentation
 
@@ -57,7 +70,7 @@ A fast, private DICOM viewer for Android phones and tablets: open studies from f
 
 **MPR and 3D**
 - Three planes with axial on top by default; link or unlink plane rotation; reset to axial, coronal, and sagittal
-- 3D heart isolation for cardiac CTA, automatic table and mattress removal, lungs kept in small fields of view
+- 3D VRT (Beta): heart isolation for cardiac CTA, automatic table and mattress removal, lungs kept in small fields of view
 - True axial, coronal, and sagittal planes for any acquisition direction, including gantry tilt
 - Oblique and double-oblique planes by rotating the crosshair
 - Thin, MIP, MinIP, and average slabs (2–80 mm)

@@ -308,7 +308,7 @@ public class ViewerActivity extends BaseActivity implements DicomView.Listener {
             }
         });
         Ui.actionRow(this, c, "cube", "MPR (3 planes)", new View.OnClickListener() { public void onClick(View v) { drawer.close(); mpr(activeSeries()); } });
-        Ui.actionRow(this, c, "orbit", "3D VRT (tissues, cuts, sessions)", new View.OnClickListener() { public void onClick(View v) { drawer.close(); vrt(activeSeries()); } });
+        Ui.actionRow(this, c, "orbit", "3D VRT (Beta): tissues, cuts, sessions", new View.OnClickListener() { public void onClick(View v) { drawer.close(); vrt(activeSeries()); } });
         Ui.actionRow(this, c, "tags", "DICOM tags", new View.OnClickListener() { public void onClick(View v) { drawer.close(); tags(); } });
         Ui.actionRow(this, c, "book", "Guide to every tool", new View.OnClickListener() { public void onClick(View v) { drawer.close(); startActivity(new Intent(ViewerActivity.this, GuideActivity.class)); } });
 
@@ -906,7 +906,7 @@ public class ViewerActivity extends BaseActivity implements DicomView.Listener {
         qItem("presets", "sliders", "Presets", new View.OnClickListener() { public void onClick(View v) { presets(); } });
         qItem("play", "play", "Play", new View.OnClickListener() { public void onClick(View v) { if (loopSwitch != null) loopSwitch.setChecked(!loop); } });
         qItem("compare", "compare", "Compare", new View.OnClickListener() { public void onClick(View v) { compare(); } });
-        qItem("vrt", "orbit", "3D", new View.OnClickListener() { public void onClick(View v) { vrt(activeSeries()); } });
+        qItem("vrt", "orbit", "3D Beta", new View.OnClickListener() { public void onClick(View v) { vrt(activeSeries()); } });
         qItem("layout", "lay4", "Layout", new View.OnClickListener() { public void onClick(View v) { pickLayout(); } });
         qItem("link", "link", "Link", new View.OnClickListener() { public void onClick(View v) { if (linkSwitch != null) linkSwitch.setChecked(!link); } });
         qItem("align", "align", "Align", new View.OnClickListener() { public void onClick(View v) { alignHere(); } });
@@ -1101,7 +1101,7 @@ public class ViewerActivity extends BaseActivity implements DicomView.Listener {
     }
 
     void seriesOptions(final Library.Series se) {
-        new AlertDialog.Builder(this).setTitle(se.label()).setItems(new String[]{"Show in selected viewport", "MPR (3 planes)", "3D VRT", "DICOM tags", "Export anonymized series (ZIP)"}, new DialogInterface.OnClickListener() {
+        new AlertDialog.Builder(this).setTitle(se.label()).setItems(new String[]{"Show in selected viewport", "MPR (3 planes)", "3D VRT (Beta)", "DICOM tags", "Export anonymized series (ZIP)"}, new DialogInterface.OnClickListener() {
             public void onClick(DialogInterface d, int w) {
                 if (w == 0) load(active, se);
                 else if (w == 1) mpr(se);

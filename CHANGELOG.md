@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9.2
+- **3D VRT is labelled Beta** throughout (screen title, quick bar, menus, Smart tools, Guide), with a one-time notice explaining its limits, how to correct results, and how to report problems
+- New app icon from the project's logo artwork: an adaptive icon (Android 8+) that launchers can shape without clipping, a monochrome layer for Android 13+ themed icons, and a rounded icon for Android 7
+- The logo appears on the Welcome and About screens
+- Brand assets in docs/assets: the logo as SVG (with and without background) and a 1280 x 640 GitHub social preview
+
 ## 1.9.1
 - **Faster scrolling:** slices you scroll past are no longer decoded one by one before the one you stop on; only the slice on screen is decoded (a fast scroll through 30 uncached slices now decodes 1, not 30). Decoding the visible slice also runs at a higher priority than background prefetching
 - **3D: CT table and cradles removed whatever their shape**, including curved head and body cradles and tables touching the skin: thin shells outside the body are removed by thickness, and dense material lying on the outer surface (cradles, tables, ECG leads) is recognized because body tissue is never dense at the skin surface

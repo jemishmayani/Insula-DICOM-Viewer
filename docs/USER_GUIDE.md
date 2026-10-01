@@ -1,6 +1,6 @@
 # User guide
 
-*Insula DICOM Viewer 1.9.1*
+*Insula DICOM Viewer 1.9.2*
 
 The same information is in the app under **Settings › Guide**, with search. Long-press any icon in the app to see its name.
 
@@ -130,6 +130,8 @@ When a measurement is selected, a bar shows its value with **Edit label** (arrow
 Measurements and key images on stored series are **saved automatically** and included in study sets. Measurements on MPR planes last until the planes change.
 
 ## 5. MPR and 3D
+
+> **3D VRT is in beta.** Automatic tissue separation can be wrong; check results and correct them with Tissues, Pick, and Cut. Not for diagnosis.
 
 Open from the viewer's Tools menu (**MPR (3 planes)**) or by long-pressing a thumbnail. The series must be a single stack of at least 3 slices with position data.
 

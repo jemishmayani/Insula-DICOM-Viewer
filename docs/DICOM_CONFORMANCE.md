@@ -1,6 +1,6 @@
 # DICOM conformance statement
 
-*Insula DICOM Viewer 1.9.1 for Android. Last updated 29 September 2026.*
+*Insula DICOM Viewer 1.9.2 for Android. Last updated 29 September 2026.*
 
 This statement follows the spirit of DICOM PS3.2. It describes which DICOM objects, encodings, and services Insula supports.
 

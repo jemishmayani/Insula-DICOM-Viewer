@@ -66,7 +66,7 @@ public class AboutActivity extends BaseActivity {
         hero.setBackground(Ui.rounded(Ui.CARD, Ui.dp(this, 20)));
         hero.setPadding(Ui.dp(this, 20), Ui.dp(this, 26), Ui.dp(this, 20), Ui.dp(this, 20));
         ImageView logo = new ImageView(this);
-        logo.setImageResource(R.mipmap.ic_launcher);
+        logo.setImageResource(R.drawable.logo);
         hero.addView(logo, new LinearLayout.LayoutParams(Ui.dp(this, 84), Ui.dp(this, 84)));
         TextView name = Ui.text(this, "Insula DICOM Viewer", 22, Ui.TEXT);
         name.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));

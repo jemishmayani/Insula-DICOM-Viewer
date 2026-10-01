@@ -35,7 +35,7 @@ public class WelcomeActivity extends BaseActivity {
         sv.addView(c);
 
         ImageView logo = new ImageView(this);
-        logo.setImageResource(R.mipmap.ic_launcher);
+        logo.setImageResource(R.drawable.logo);
         c.addView(logo, new LinearLayout.LayoutParams(Ui.dp(this, 88), Ui.dp(this, 88)));
         TextView t = Ui.text(this, "Welcome to Insula", 26, Ui.TEXT);
         t.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));

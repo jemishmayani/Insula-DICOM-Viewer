@@ -274,8 +274,132 @@ final class Seg {
      * Removes objects outside the body: the CT table (a thin, wide plate running the scan's length behind the patient)
      * and small disconnected items such as ECG leads. Large separate parts, such as arms, are kept.
      */
+    /**
+     * Removes thin shells outside the body: the table top, a curved head or body cradle, or a thin pad, whatever their
+     * shape and even where they touch the patient. Solid material is eroded by about 4 mm; whatever is thicker
+     * (the body, limbs) survives and is grown back by the same amount. Solid voxels that didn't come back and lie
+     * outside the body's outline are removed. Thin structures inside the body (fine vessels, nodules) are kept.
+     */
+    static void removeThinShells(Vol3D v) {
+        byte[] L = v.labels;
+        short[] H = v.hu;
+        int nx = v.nx, ny = v.ny, nz = v.nz, n = v.n(), sxy = nx * ny;
+        int r = Math.max(2, (int) Math.round(4 / Math.min(v.sx, Math.min(v.sy, v.sz))));
+        // 1 = solid; erode r times (outside the volume counts as solid, so cut edges don't erode).
+        byte[] m = new byte[n];
+        for (int x = 0; x < n; x++) m[x] = (byte) (L[x] != BG && H[x] > -500 ? 1 : 0);
+        byte[] e = m.clone();
+        IntList peel = new IntList(1 << 14);
+        for (int it = 0; it < r; it++) {
+            peel.clear();
+            for (int k = 0; k < nz; k++) for (int j = 0; j < ny; j++) for (int i = 0; i < nx; i++) {
+                int x = (k * ny + j) * nx + i;
+                if (e[x] == 0) continue;
+                if ((i > 0 && e[x - 1] == 0) || (i < nx - 1 && e[x + 1] == 0) || (j > 0 && e[x - nx] == 0) || (j < ny - 1 && e[x + nx] == 0)
+                        || (k > 0 && e[x - sxy] == 0) || (k < nz - 1 && e[x + sxy] == 0)) peel.add(x);
+            }
+            for (int c = 0; c < peel.size; c++) e[peel.a[c]] = 0;
+        }
+        // Keep thick parts (at least 20 cm3 after erosion): the body and any limbs.
+        double vox = v.sx * v.sy * v.sz;
+        java.util.BitSet keep = new java.util.BitSet(n), seen = new java.util.BitSet(n);
+        IntQueue q = new IntQueue(1 << 14);
+        IntList comp = new IntList(1 << 12);
+        for (int s0 = 0; s0 < n; s0++) {
+            if (e[s0] == 0 || seen.get(s0)) continue;
+            comp.clear();
+            seen.set(s0); q.add(s0);
+            while (!q.isEmpty()) {
+                int x = q.poll(), i = x % nx, j = (x / nx) % ny, k = x / sxy;
+                comp.add(x);
+                int[] nb = {i > 0 ? x - 1 : -1, i < nx - 1 ? x + 1 : -1, j > 0 ? x - nx : -1, j < ny - 1 ? x + nx : -1, k > 0 ? x - sxy : -1, k < nz - 1 ? x + sxy : -1};
+                for (int y : nb) if (y >= 0 && e[y] != 0 && !seen.get(y)) { seen.set(y); q.add(y); }
+            }
+            if (comp.size * vox >= 20000) for (int c = 0; c < comp.size; c++) keep.set(comp.a[c]);
+        }
+        if (keep.isEmpty()) return;
+        // Grow the thick parts back by r steps, through solid material only.
+        IntList front = new IntList(1 << 14), next = new IntList(1 << 14);
+        for (int x = keep.nextSetBit(0); x >= 0; x = keep.nextSetBit(x + 1)) front.add(x);
+        for (int it = 0; it < r && front.size > 0; it++) {
+            next.clear();
+            for (int c = 0; c < front.size; c++) {
+                int x = front.a[c], i = x % nx, j = (x / nx) % ny, k = x / sxy;
+                int[] nb = {i > 0 ? x - 1 : -1, i < nx - 1 ? x + 1 : -1, j > 0 ? x - nx : -1, j < ny - 1 ? x + nx : -1, k > 0 ? x - sxy : -1, k < nz - 1 ? x + sxy : -1};
+                for (int y : nb) if (y >= 0 && m[y] != 0 && !keep.get(y)) { keep.set(y); next.add(y); }
+            }
+            IntList t = front; front = next; next = t;
+        }
+        // Remove thin solid material outside the body's outline in each slice.
+        byte[] hull = new byte[sxy];
+        for (int k = 0; k < nz; k++) {
+            boolean has = hullOf(keep, k * sxy, nx, ny, hull);
+            for (int x2 = 0; x2 < sxy; x2++) {
+                int x = k * sxy + x2;
+                if (m[x] == 0 || keep.get(x)) continue;
+                if (!has || hull[x2] == 0) L[x] = BG;
+            }
+        }
+    }
+
+    /**
+     * Removes dense material lying on the outer surface, such as a cradle or table flush against the skin, ECG leads,
+     * or external devices. In a patient, dense tissue (bone, contrast) is covered by skin and soft tissue, so a dense
+     * structure exposed to the outside air and lying mostly (70%) within 5 mm of it is external. A skull under thin
+     * skin at the nose reaches the air in only a few places, so it is kept.
+     */
+    static void removeSurfaceCoating(Vol3D v) {
+        byte[] L = v.labels;
+        short[] H = v.hu;
+        int nx = v.nx, ny = v.ny, nz = v.nz, n = v.n(), sxy = nx * ny;
+        int dmax = Math.max(2, (int) Math.round(5 / Math.min(v.sx, Math.min(v.sy, v.sz))));
+        // Distance (in steps, up to dmax) from the outside air, through the body.
+        byte[] dist = new byte[n];
+        java.util.Arrays.fill(dist, (byte) 127);
+        IntQueue q = new IntQueue(1 << 16);
+        for (int x = 0; x < n; x++) if (L[x] == BG) { dist[x] = 0; q.add(x); }
+        while (!q.isEmpty()) {
+            int x = q.poll(), d = dist[x];
+            if (d >= dmax) continue;
+            int i = x % nx, j = (x / nx) % ny, k = x / sxy;
+            int[] nb = {i > 0 ? x - 1 : -1, i < nx - 1 ? x + 1 : -1, j > 0 ? x - nx : -1, j < ny - 1 ? x + nx : -1, k > 0 ? x - sxy : -1, k < nz - 1 ? x + sxy : -1};
+            for (int y : nb) if (y >= 0 && dist[y] > d + 1) { dist[y] = (byte) (d + 1); q.add(y); }
+        }
+        // Dense components touching the air, judged by how much of them hugs the surface.
+        java.util.BitSet seen = new java.util.BitSet(n), removed = new java.util.BitSet(n);
+        IntList comp = new IntList(1 << 12);
+        for (int s0 = 0; s0 < n; s0++) {
+            if (L[s0] == BG || H[s0] <= 120 || dist[s0] != 1 || seen.get(s0)) continue;
+            comp.clear();
+            seen.set(s0); q.add(s0);
+            long near = 0;
+            while (!q.isEmpty()) {
+                int x = q.poll(), i = x % nx, j = (x / nx) % ny, k = x / sxy;
+                comp.add(x);
+                if (dist[x] <= dmax) near++;
+                int[] nb = {i > 0 ? x - 1 : -1, i < nx - 1 ? x + 1 : -1, j > 0 ? x - nx : -1, j < ny - 1 ? x + nx : -1, k > 0 ? x - sxy : -1, k < nz - 1 ? x + sxy : -1};
+                for (int y : nb) if (y >= 0 && L[y] != BG && H[y] > 120 && !seen.get(y)) { seen.set(y); q.add(y); }
+            }
+            if (near >= 0.7 * comp.size) for (int c = 0; c < comp.size; c++) { L[comp.a[c]] = BG; removed.set(comp.a[c]); }
+        }
+        // Partial volume where a cradle met the skin leaves a band of in-between values: clear up to two voxels of
+        // lighter material next to what was removed, near the surface only.
+        for (int pass = 0; pass < 2 && !removed.isEmpty(); pass++) {
+            IntList add = new IntList(1 << 12);
+            for (int x = removed.nextSetBit(0); x >= 0; x = removed.nextSetBit(x + 1)) {
+                int i = x % nx, j = (x / nx) % ny, k = x / sxy;
+                int[] nb = {i > 0 ? x - 1 : -1, i < nx - 1 ? x + 1 : -1, j > 0 ? x - nx : -1, j < ny - 1 ? x + nx : -1, k > 0 ? x - sxy : -1, k < nz - 1 ? x + sxy : -1};
+                for (int y : nb) if (y >= 0 && L[y] != BG && H[y] <= 120 && dist[y] <= 2) add.add(y);
+            }
+            removed.clear();
+            for (int c = 0; c < add.size; c++) { L[add.a[c]] = BG; removed.set(add.a[c]); }
+        }
+    }
+
     static void removeExternal(Vol3D v, Progress prog) {
         if (prog != null) prog.update("Removing the table", 92);
+        removeThinShells(v);
+        removeSurfaceCoating(v);
         byte[] L = v.labels;
         short[] H = v.hu;
         int nx = v.nx, ny = v.ny, nz = v.nz, n = v.n(), sxy = nx * ny;

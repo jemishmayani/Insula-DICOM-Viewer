@@ -32,7 +32,10 @@ public class VrtTest {
     static Vol3D phantom() { return phantom(0, false); }
 
     /** @param fov radius (mm) of a circular field of view, 0 for none; outside it is scanner padding. @param table adds a CT table. */
-    static Vol3D phantom(double fov, boolean table) {
+    static Vol3D phantom(double fov, boolean table) { return phantom(fov, table, 0); }
+
+    /** @param cradle 0 none, 1 a curved cradle behind the body on a foam pad, 2 the cradle touching the skin. */
+    static Vol3D phantom(double fov, boolean table, int cradle) {
         Vol3D v = new Vol3D(NX, NY, NZ, 1, 1, 1, new double[]{-79.5, -69.5, -59.5}, true, 40, 400, -1024, 3071);
         truth = new byte[v.n()];
         fine = new byte[v.n()];
@@ -71,6 +74,12 @@ public class VrtTest {
                 }
             }
             if (table && y > 64.5 && y < 67.5 && Math.abs(x) < 60) { hu = 200; t = Seg.BG; }                                  // CT table
+            if (cradle > 0 && y > 0) {                                                                                       // curved cradle
+                double er = Math.sqrt(sq(x / 75) + sq(y / 62));
+                double in = cradle == 1 ? 1.05 : 1.0, out = in + 0.06;
+                if (er >= in && er < out) { hu = 250; t = Seg.BG; }
+                else if (cradle == 1 && er >= 1.0 && er < in) { hu = -900; t = Seg.BG; }
+            }
             if (table && t == Seg.BG && hu < -990 && y > 55 && y <= 64.5 && Math.abs(x) < 60) { hu = -900; t = Seg.BG; }     // mattress foam
             int x0 = v.idx(i, j, k);
             sharp[x0] = (float) hu;
@@ -245,6 +254,24 @@ public class VrtTest {
         check("heart isolation hides the front chest wall", hk[5] >= 0.90, pct(hk[5]) + " hidden");
         Seg.undo(v, iso);
         check("undo brings the whole chest back", java.util.Arrays.equals(keep, v.labels), "");
+
+        // Curved cradle wrapping the back of the body, on a foam pad and touching the skin
+        for (int mode = 1; mode <= 2; mode++) {
+            Vol3D cv = phantom(0, false, mode);
+            Seg.segment(cv, Seg.estimate(cv), null);
+            long cr = 0, crLeft = 0;
+            for (int k = 0; k < NZ; k++) for (int j = 0; j < NY; j++) for (int i = 0; i < NX; i++) {
+                double x = -79.5 + i, y = -69.5 + j;
+                double er = Math.sqrt(sq(x / 75) + sq(y / 62)), in = mode == 1 ? 1.05 : 1.0;
+                if (y > 2 && er >= in + 0.012 && er < in + 0.048) { cr++; if (cv.labels[cv.idx(i, j, k)] != Seg.BG) crLeft++; }
+            }
+            String how = mode == 1 ? "on a foam pad" : "touching the skin";
+            check("curved cradle " + how + " removed", cr > 0 && crLeft <= cr / 100, crLeft + " of " + cr + " cradle voxels left");
+            check("cradle " + how + ": body kept", recall(cv, Seg.BONE, 0) >= 0.95 && recall(cv, Seg.ORGAN, 0) >= 0.9 && recall(cv, Seg.LUNG, 0) >= 0.97,
+                    "bone " + pct(recall(cv, Seg.BONE, 0)) + ", soft tissue " + pct(recall(cv, Seg.ORGAN, 0)) + ", lungs " + pct(recall(cv, Seg.LUNG, 0)));
+            check("cradle " + how + ": thin coronary inside the body kept", share(cv, T_COR, Seg.VESSEL) + share(cv, T_COR, Seg.CALCIUM) >= 0.5,
+                    pct(share(cv, T_COR, Seg.VESSEL) + share(cv, T_COR, Seg.CALCIUM)));
+        }
 
         // Small circular field of view cutting through the lungs (as in cardiac CT), and a CT table
         Vol3D sv = phantom(60, false);

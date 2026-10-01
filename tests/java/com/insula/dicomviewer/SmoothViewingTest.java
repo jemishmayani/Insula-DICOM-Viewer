@@ -97,6 +97,24 @@ public class SmoothViewingTest {
         for (int i = 0; i < 200 && warm < 16; i++) { Thread.sleep(10); warm = 0; for (int k = 11; k <= 26; k++) if (Library.peek(se.slices().get(k)) != null) warm++; }
         check("prefetch warms the next 16 slices in the scroll direction", warm == 16, warm + "/16 after " + (System.nanoTime() - t0) / 1000000 + " ms");
 
+        // Fast scrolling: requests the user has scrolled past are skipped, not decoded one by one
+        Library.clearCache();
+        final java.util.concurrent.atomic.AtomicInteger want = new java.util.concurrent.atomic.AtomicInteger();
+        final CountDownLatch last = new CountDownLatch(1);
+        final int[] decoded = {0};
+        long s0 = System.nanoTime();
+        for (int i = 0; i < 30; i++) {
+            final int tok = want.incrementAndGet(), idx = i;
+            abstract class Req implements Library.Done, Library.Wanted { }
+            Library.loadAsync(se.slices().get(i), new Req() {
+                public boolean wanted() { return want.get() == tok; }
+                public void done(RawImage r, Throwable e) { synchronized (decoded) { decoded[0]++; } if (idx == 29) last.countDown(); }
+            });
+        }
+        boolean lastShown = last.await(10, TimeUnit.SECONDS);
+        long ms = (System.nanoTime() - s0) / 1000000;
+        check("fast scroll through 30 slices decodes only what's on screen", lastShown && decoded[0] <= 3, decoded[0] + " of 30 decoded; last slice shown after " + ms + " ms");
+
         System.out.println(fails == 0 ? "ALL PASSED" : fails + " FAILED");
         if (fails > 0) System.exit(1);
     }

@@ -1,6 +1,6 @@
 # Google Play and Android compliance review
 
-*Insula DICOM Viewer 1.9.0. Reviewed 30 September 2026 against Android 16 (API 36) and Android 17 (API 37, the current release since June 2026).*
+*Insula DICOM Viewer 1.9.1. Reviewed 30 September 2026 against Android 16 (API 36) and Android 17 (API 37, the current release since June 2026).*
 
 ## Summary
 

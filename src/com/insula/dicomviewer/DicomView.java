@@ -102,7 +102,7 @@ public class DicomView extends View {
     final Paint selLine = new Paint(Paint.ANTI_ALIAS_FLAG), handleFill = new Paint(Paint.ANTI_ALIAS_FLAG);
     public float crossX = Float.NaN, crossY = Float.NaN;
     // Smooth loading and rendering
-    int loadToken;
+    volatile int loadToken;
     public boolean loading, touching, interacting, dirty;
     public int scrollDir = 1;
     Bitmap preview;
@@ -252,7 +252,7 @@ public class DicomView extends View {
                 // Keep showing the previous slice until this one is decoded off the UI thread.
                 loading = true;
                 final int tok = ++loadToken;
-                prov.load(i, new Library.Done() {
+                prov.load(i, new Pending(tok) {
                     public void done(final RawImage r, final Throwable err) {
                         post(new Runnable() {
                             public void run() {
@@ -273,6 +273,13 @@ public class DicomView extends View {
         }
         invalidate();
         if (listener != null) listener.onIndexChanged(this);
+    }
+
+    /** A background load that knows whether it's still the slice on screen. */
+    abstract class Pending implements Library.Done, Library.Wanted {
+        final int tok;
+        Pending(int tok) { this.tok = tok; }
+        public boolean wanted() { return tok == loadToken; }
     }
 
     void apply(RawImage r) {

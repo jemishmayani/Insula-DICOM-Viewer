@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.1
+- **Faster scrolling:** slices you scroll past are no longer decoded one by one before the one you stop on; only the slice on screen is decoded (a fast scroll through 30 uncached slices now decodes 1, not 30). Decoding the visible slice also runs at a higher priority than background prefetching
+- **3D: CT table and cradles removed whatever their shape**, including curved head and body cradles and tables touching the skin: thin shells outside the body are removed by thickness, and dense material lying on the outer surface (cradles, tables, ECG leads) is recognized because body tissue is never dense at the skin surface
+- Tests: curved cradle on a foam pad and touching the skin, with the body and thin internal vessels kept; fast-scroll decoding
+
 ## 1.9.0
 - **Smart tools by study type:** recognizes cervical spine, CVJ, spine, brain, cardiac/coronary CTA, CTA, CTPA, trauma, neck, chest, and abdomen from the study and series descriptions, body part, protocol, and contrast. The Smart button in the quick bar offers suited window presets, MPR planes, MIP/MinIP/thin-MIP slabs, measurements, and 3D (for example 3D bone for spine and trauma)
 - **Measurement shortcuts** with how-to guidance and commonly cited reference values (for guidance only): ADI, BDI, Chamberlain, McGregor, canal diameter, vertebral body height, Cobb, midline shift, and hematoma volume

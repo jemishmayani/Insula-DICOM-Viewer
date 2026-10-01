@@ -1,6 +1,6 @@
 # User guide
 
-*Insula DICOM Viewer 1.9.0*
+*Insula DICOM Viewer 1.9.1*
 
 The same information is in the app under **Settings › Guide**, with search. Long-press any icon in the app to see its name.
 

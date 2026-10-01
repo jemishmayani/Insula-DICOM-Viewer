@@ -432,16 +432,18 @@ public final class Library {
     static final java.util.concurrent.ConcurrentHashMap<String, Object> LOCKS = new java.util.concurrent.ConcurrentHashMap<>();
 
     /** Background threads that never keep the process alive on their own. */
-    static java.util.concurrent.ThreadFactory daemon(final String name) {
+    static java.util.concurrent.ThreadFactory daemon(final String name) { return daemon(name, Thread.NORM_PRIORITY); }
+
+    static java.util.concurrent.ThreadFactory daemon(final String name, final int priority) {
         return new java.util.concurrent.ThreadFactory() {
-            public Thread newThread(Runnable r) { Thread t = new Thread(r, name); t.setDaemon(true); return t; }
+            public Thread newThread(Runnable r) { Thread t = new Thread(r, name); t.setDaemon(true); t.setPriority(priority); return t; }
         };
     }
 
     static final int PREFETCH_THREADS = Math.max(1, Math.min(3, Runtime.getRuntime().availableProcessors() - 1));
-    static final ExecutorService EX = Executors.newFixedThreadPool(PREFETCH_THREADS, daemon("insula-prefetch"));
+    static final ExecutorService EX = Executors.newFixedThreadPool(PREFETCH_THREADS, daemon("insula-prefetch", Thread.NORM_PRIORITY - 2));
     /** Decodes the slice the user is waiting for, ahead of any prefetching. */
-    static final ExecutorService UI_DECODE = Executors.newSingleThreadExecutor(daemon("insula-decode"));
+    static final ExecutorService UI_DECODE = Executors.newSingleThreadExecutor(daemon("insula-decode", Thread.NORM_PRIORITY + 1));
     static final ExecutorService THUMB = Executors.newSingleThreadExecutor(daemon("insula-thumbs"));
     static volatile int gen;
     static final Map<String, Bitmap> thumbs = Collections.synchronizedMap(new HashMap<String, Bitmap>());
@@ -520,10 +522,15 @@ public final class Library {
 
     public interface Done { void done(RawImage r, Throwable err); }
 
+    /** A request that may have been superseded (the user scrolled on) before its turn came. */
+    public interface Wanted { boolean wanted(); }
+
     /** Decodes on the dedicated decode thread and reports back (on that thread). */
     public static void loadAsync(final SliceRef s, final Done cb) {
         UI_DECODE.submit(new Runnable() {
             public void run() {
+                // Skip slices the user has already scrolled past; only the one on screen matters.
+                if (cb instanceof Wanted && !((Wanted) cb).wanted()) return;
                 RawImage r = null;
                 Throwable err = null;
                 try { r = load(s); } catch (Throwable t) { err = t; }

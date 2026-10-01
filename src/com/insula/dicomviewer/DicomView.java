@@ -27,7 +27,8 @@ import java.util.Set;
 
 public class DicomView extends View {
     public static final int T_WL = 0, T_PAN = 1, T_SCROLL = 2, T_ZOOM = 3, T_LENGTH = 4, T_ANGLE = 5, T_COBB = 6,
-            T_ELLIPSE = 7, T_RECT = 8, T_PROBE = 9, T_ARROW = 10, T_CROSS = 11, T_ERASE = 12, T_ORBIT = 13, T_CURVE = 14, T_SELECT = 15;
+            T_ELLIPSE = 7, T_RECT = 8, T_PROBE = 9, T_ARROW = 10, T_CROSS = 11, T_ERASE = 12, T_ORBIT = 13, T_CURVE = 14, T_SELECT = 15,
+            T_PTLINE = 16, T_ABC = 17;
 
     public interface Listener {
         void onIndexChanged(DicomView v);
@@ -35,6 +36,10 @@ public class DicomView extends View {
         void onWindowChanged(DicomView v);
         void onImageTap(DicomView v, float ix, float iy);
         void onArrowCreated(DicomView v, Ann a);
+        /** A measurement was completed (used for named shortcuts and the hematoma volume prompt). */
+        void onMeasureDone(DicomView v, Ann a);
+        /** A measurement is being edited (moved or reshaped), so displayed results can follow it. */
+        void onMeasureEdited(DicomView v, Ann a);
         void onSelection(DicomView v, Ann a);
         /** A slice that was loading in the background is now shown. */
         void onImageReady(DicomView v);
@@ -51,7 +56,7 @@ public class DicomView extends View {
     /** A reference line through (x,y) with direction (dx,dy), in image pixels. */
     public static final class CrossLine {
         public float x, y, dx, dy, slabHalf;
-        public int color;
+        public int color, plane = -1;
     }
     public final List<CrossLine> crossLines = new ArrayList<>();
     public boolean crossVisible = true;
@@ -83,6 +88,8 @@ public class DicomView extends View {
     public Listener listener;
     public String emptyText = "No series loaded. Tap Series to choose one.";
     public String label;
+    /** Label given to the next measurement drawn (set by a measurement shortcut such as "ADI"). */
+    public String nextText = "";
     final Map<Integer, List<Ann>> anns = new HashMap<>();
     Ann pending;
     int phase;
@@ -251,7 +258,7 @@ public class DicomView extends View {
                             public void run() {
                                 if (tok != loadToken) return;
                                 loading = false;
-                                if (err != null) { img = null; error = err.getMessage() == null ? err.toString() : err.getMessage(); dirty = true; }
+                                if (err != null) { img = null; error = Ui.friendly(err); dirty = true; }
                                 else apply(r);
                                 invalidate();
                                 if (listener != null) listener.onImageReady(DicomView.this);
@@ -262,7 +269,7 @@ public class DicomView extends View {
             }
         } else {
             try { apply(prov.image(i)); }
-            catch (Throwable t) { img = null; error = t.getMessage() == null ? t.toString() : t.getMessage(); dirty = true; }
+            catch (Throwable t) { img = null; error = Ui.friendly(t); dirty = true; }
         }
         invalidate();
         if (listener != null) listener.onIndexChanged(this);
@@ -368,7 +375,8 @@ public class DicomView extends View {
     /** Clears in-memory annotations (reconstructed planes). Stored series annotations are untouched. */
     public void clearAnnotations() { anns.clear(); pending = null; undo.clear(); if (selected != null) { selected = null; notifySel(); } invalidate(); }
 
-    static boolean isAnnTool(int t) { return (t >= T_LENGTH && t <= T_ARROW) || t == T_SELECT || t == T_ERASE; }
+    static boolean isAnnTool(int t) { return (t >= T_LENGTH && t <= T_ARROW) || t == T_SELECT || t == T_ERASE || t == T_PTLINE || t == T_ABC; }
+    static boolean isDrawTool(int t) { return (t >= T_LENGTH && t <= T_ARROW) || t == T_PTLINE || t == T_ABC; }
 
     void pushUndo() {
         Undo u = new Undo();
@@ -437,7 +445,7 @@ public class DicomView extends View {
 
     public String describe(Ann a) {
         switch (a.type) {
-            case T_LENGTH: return "Length  " + fmtLen(a.p[0], a.p[1], a.p[2], a.p[3]);
+            case T_LENGTH: return (a.text.isEmpty() ? "Length" : a.text) + "  " + fmtLen(a.p[0], a.p[1], a.p[2], a.p[3]);
             case T_ANGLE: return String.format("Angle  %.1f°", angleAt(a.p[0], a.p[1], a.p[2], a.p[3], a.p[4], a.p[5]));
             case T_COBB: return Float.isNaN(a.p[4]) ? "Cobb angle" : String.format("Cobb angle  %.1f°", cobb(a.p));
             case T_ELLIPSE: case T_RECT: {
@@ -446,6 +454,8 @@ public class DicomView extends View {
             }
             case T_PROBE: return "Pixel value  " + valueAt(a.p[0], a.p[1]);
             case T_ARROW: return a.text.isEmpty() ? "Arrow (no label)" : "Arrow  \u201c" + a.text + "\u201d";
+            case T_PTLINE: return (a.text.isEmpty() ? "Point to line" : a.text) + (Float.isNaN(a.p[4]) ? "" : "  " + ptLineText(a.p));
+            case T_ABC: return "Hematoma ABC/2" + (Float.isNaN(a.p[4]) ? "" : "  A " + fmtLen(a.p[0], a.p[1], a.p[2], a.p[3]) + ", B " + fmtLen(a.p[4], a.p[5], a.p[6], a.p[7])) + (abcVolume(a).isEmpty() ? "" : "  " + abcVolume(a));
         }
         return "Annotation";
     }
@@ -490,7 +500,8 @@ public class DicomView extends View {
             switch (a.type) {
                 case T_LENGTH: case T_ARROW: if (segDist(sx, sy, q[0], q[1], q[2], q[3]) < tol) return a; break;
                 case T_ANGLE: if (segDist(sx, sy, q[0], q[1], q[2], q[3]) < tol || segDist(sx, sy, q[2], q[3], q[4], q[5]) < tol) return a; break;
-                case T_COBB: if (segDist(sx, sy, q[0], q[1], q[2], q[3]) < tol || (!Float.isNaN(q[4]) && segDist(sx, sy, q[4], q[5], q[6], q[7]) < tol)) return a; break;
+                case T_COBB: case T_ABC: if (segDist(sx, sy, q[0], q[1], q[2], q[3]) < tol || (!Float.isNaN(q[4]) && segDist(sx, sy, q[4], q[5], q[6], q[7]) < tol)) return a; break;
+                case T_PTLINE: if (segDist(sx, sy, q[0], q[1], q[2], q[3]) < tol || (!Float.isNaN(q[4]) && Math.hypot(q[4] - sx, q[5] - sy) < tol * 1.3f)) return a; break;
                 case T_PROBE: if (Math.hypot(q[0] - sx, q[1] - sy) < tol * 1.3f) return a; break;
                 case T_ELLIPSE: case T_RECT: {
                     float[] ip = toImage(sx, sy);
@@ -621,7 +632,7 @@ public class DicomView extends View {
             }
             if (selected != null) { selected = null; notifySel(); }
         }
-        if (!midCreate && tool >= T_LENGTH && tool <= T_ARROW) { pushUndo(); createUndo = true; }
+        if (!midCreate && isDrawTool(tool)) { pushUndo(); createUndo = true; }
         switch (tool) {
             case T_LENGTH: case T_ELLIPSE: case T_RECT: case T_ARROW:
                 pending = new Ann(tool, new float[]{p[0], p[1], p[0], p[1]});
@@ -631,9 +642,13 @@ public class DicomView extends View {
                 if (pending != null && pending.type == T_ANGLE && phase == 1) { pending.p[4] = p[0]; pending.p[5] = p[1]; }
                 else { pending = new Ann(T_ANGLE, new float[]{p[0], p[1], p[0], p[1], p[0], p[1]}); phase = 0; annotations().add(pending); }
                 break;
-            case T_COBB:
-                if (pending != null && pending.type == T_COBB && phase == 1) { pending.p[4] = pending.p[6] = p[0]; pending.p[5] = pending.p[7] = p[1]; }
-                else { pending = new Ann(T_COBB, new float[]{p[0], p[1], p[0], p[1], Float.NaN, Float.NaN, Float.NaN, Float.NaN}); phase = 0; annotations().add(pending); }
+            case T_COBB: case T_ABC:
+                if (pending != null && pending.type == tool && phase == 1) { pending.p[4] = pending.p[6] = p[0]; pending.p[5] = pending.p[7] = p[1]; }
+                else { pending = new Ann(tool, new float[]{p[0], p[1], p[0], p[1], Float.NaN, Float.NaN, Float.NaN, Float.NaN}); phase = 0; annotations().add(pending); }
+                break;
+            case T_PTLINE:
+                if (pending != null && pending.type == T_PTLINE && phase == 1) { pending.p[4] = p[0]; pending.p[5] = p[1]; }
+                else { pending = new Ann(T_PTLINE, new float[]{p[0], p[1], p[0], p[1], Float.NaN, Float.NaN}); phase = 0; annotations().add(pending); }
                 break;
             case T_PROBE:
                 pending = new Ann(T_PROBE, new float[]{p[0], p[1]});
@@ -643,6 +658,7 @@ public class DicomView extends View {
                 if (listener != null) listener.onImageTap(this, p[0], p[1]);
                 break;
         }
+        if (pending != null && !midCreate && pending.text.isEmpty() && !nextText.isEmpty() && pending.type != T_ARROW && pending.type != T_ABC) pending.text = nextText;
         invalidate();
     }
 
@@ -657,6 +673,7 @@ public class DicomView extends View {
                 lastImg = p;
             }
             invalidate();
+            if (listener != null) listener.onMeasureEdited(this, selected);
             return;
         }
         switch (tool) {
@@ -686,8 +703,11 @@ public class DicomView extends View {
                     else { pending.p[4] = p[0]; pending.p[5] = p[1]; }
                 }
                 break;
-            case T_COBB:
+            case T_COBB: case T_ABC:
                 if (pending != null) { if (phase == 0) { pending.p[2] = p[0]; pending.p[3] = p[1]; } else { pending.p[6] = p[0]; pending.p[7] = p[1]; } }
+                break;
+            case T_PTLINE:
+                if (pending != null) { if (phase == 0) { pending.p[2] = p[0]; pending.p[3] = p[1]; } else { pending.p[4] = p[0]; pending.p[5] = p[1]; } }
                 break;
             case T_PROBE: if (pending != null) { pending.p[0] = p[0]; pending.p[1] = p[1]; } break;
             case T_CROSS: if (listener != null) listener.onImageTap(this, p[0], p[1]); break;
@@ -704,7 +724,7 @@ public class DicomView extends View {
 
     void up(float x, float y) {
         if (hooked()) { float[] p = toImage(x, y); hook.onHook(this, 2, p[0], p[1], x, y); invalidate(); return; }
-        if (editing) { editing = false; dragIdx = -1; dragBody = false; persist(); notifySel(); invalidate(); return; }
+        if (editing) { editing = false; dragIdx = -1; dragBody = false; persist(); notifySel(); invalidate(); if (listener != null && selected != null) listener.onMeasureEdited(this, selected); return; }
         if (tool == T_ERASE) { erase(x, y); return; }
         if (pending == null) return;
         Ann made = pending;
@@ -718,13 +738,17 @@ public class DicomView extends View {
                 if (phase == 0) { if (tiny(pending.p, 0, 2)) { removeAnn(pending); pending = null; } else phase = 1; }
                 else { pending.done = true; pending = null; phase = 0; }
                 break;
-            case T_COBB:
+            case T_COBB: case T_ABC:
                 if (phase == 0) { if (tiny(pending.p, 0, 2)) { removeAnn(pending); pending = null; } else phase = 1; }
                 else { if (tiny(pending.p, 4, 6)) { pending.p[4] = Float.NaN; return; } pending.done = true; pending = null; phase = 0; }
                 break;
+            case T_PTLINE:
+                if (phase == 0) { if (tiny(pending.p, 0, 2)) { removeAnn(pending); pending = null; } else phase = 1; }
+                else { pending.done = true; pending = null; phase = 0; }
+                break;
             case T_PROBE: pending.done = true; pending = null; break;
         }
-        if (made.done) { createUndo = false; selected = made; persist(); notifySel(); }
+        if (made.done) { createUndo = false; selected = made; persist(); notifySel(); if (listener != null) listener.onMeasureDone(this, made); }
         else if (pending == null && createUndo) { if (!undo.isEmpty()) undo.pop(); createUndo = false; }
         invalidate();
     }
@@ -746,6 +770,35 @@ public class DicomView extends View {
     double sx() { return img != null && img.colSp > 0 ? img.colSp : 0; }
     double sy() { return img != null && img.rowSp > 0 ? img.rowSp : 0; }
     boolean calibrated() { return sx() > 0 && sy() > 0; }
+
+    /** Foot of the perpendicular from (px, py) to the line through (ax, ay)-(bx, by). */
+    static float[] foot(float ax, float ay, float bx, float by, float px, float py) {
+        float ux = bx - ax, uy = by - ay, l2 = ux * ux + uy * uy;
+        float t = l2 < 1e-9f ? 0 : ((px - ax) * ux + (py - ay) * uy) / l2;
+        return new float[]{ax + t * ux, ay + t * uy};
+    }
+
+    /** Perpendicular distance from point p[4..5] to the line p[0..3], in the image's units. */
+    String ptLineText(float[] p) {
+        float[] f = foot(p[0], p[1], p[2], p[3], p[4], p[5]);
+        return fmtLen(p[4], p[5], f[0], f[1]);
+    }
+
+    /** Length in millimetres, or NaN if the image has no pixel spacing. */
+    double lenMm(float x1, float y1, float x2, float y2) {
+        return calibrated() ? Math.hypot((x2 - x1) * sx(), (y2 - y1) * sy()) : Double.NaN;
+    }
+
+    /** "ABC/2 = 24.1 mL" once the number of slices (C) has been entered; stored in the annotation text as "C=<cm>". */
+    String abcVolume(Ann a) {
+        if (a.type != T_ABC || Float.isNaN(a.p[4]) || !a.text.startsWith("C=")) return "";
+        try {
+            double c = Double.parseDouble(a.text.substring(2));
+            double A = lenMm(a.p[0], a.p[1], a.p[2], a.p[3]) / 10, B = lenMm(a.p[4], a.p[5], a.p[6], a.p[7]) / 10;
+            if (Double.isNaN(A) || Double.isNaN(B)) return "";
+            return String.format("ABC/2 \u2248 %.1f mL (C %.1f cm)", A * B * c / 2, c);
+        } catch (Exception e) { return ""; }
+    }
 
     String fmtLen(float x1, float y1, float x2, float y2) {
         if (calibrated()) {
@@ -1003,7 +1056,38 @@ public class DicomView extends View {
             case T_LENGTH:
                 c.drawLine(q[0], q[1], q[2], q[3], L);
                 c.drawCircle(q[0], q[1], 2.5f * dp, L); c.drawCircle(q[2], q[3], 2.5f * dp, L);
-                label(c, fmtLen(a.p[0], a.p[1], a.p[2], a.p[3]), q[2] + o, q[3] + o);
+                label(c, (a.text.isEmpty() ? "" : a.text + " ") + fmtLen(a.p[0], a.p[1], a.p[2], a.p[3]), q[2] + o, q[3] + o);
+                break;
+            case T_PTLINE: {
+                // Reference line drawn across, then the perpendicular from the tapped point to it.
+                float ux = q[2] - q[0], uy = q[3] - q[1];
+                float len = (float) Math.hypot(ux, uy);
+                if (len > 1e-3f) {
+                    float ex = ux / len * 40 * dp, ey = uy / len * 40 * dp;
+                    c.drawLine(q[0] - ex, q[1] - ey, q[2] + ex, q[3] + ey, L);
+                }
+                c.drawCircle(q[0], q[1], 2.5f * dp, L); c.drawCircle(q[2], q[3], 2.5f * dp, L);
+                if (!Float.isNaN(q[4])) {
+                    float[] f = foot(q[0], q[1], q[2], q[3], q[4], q[5]);
+                    Paint d = new Paint(L);
+                    d.setPathEffect(new android.graphics.DashPathEffect(new float[]{6 * dp, 4 * dp}, 0));
+                    c.drawLine(q[4], q[5], f[0], f[1], d);
+                    c.drawCircle(q[4], q[5], 3.5f * dp, L);
+                    label(c, (a.text.isEmpty() ? "" : a.text + " ") + ptLineText(a.p), q[4] + o, q[5] + o);
+                } else if (!a.done) label(c, a.text.isEmpty() ? "Now tap the point" : a.text + ": now tap the point", q[2] + o, q[3] + o);
+                break;
+            }
+            case T_ABC:
+                c.drawLine(q[0], q[1], q[2], q[3], L);
+                label(c, "A " + fmtLen(a.p[0], a.p[1], a.p[2], a.p[3]), q[2] + o, q[3] + o);
+                if (!Float.isNaN(q[4])) {
+                    c.drawLine(q[4], q[5], q[6], q[7], L);
+                    String v = abcVolume(a);
+                    List<String> lines = new ArrayList<>();
+                    lines.add("B " + fmtLen(a.p[4], a.p[5], a.p[6], a.p[7]));
+                    if (!v.isEmpty()) lines.add(v);
+                    label(c, lines, q[6] + o, q[7] + o);
+                } else if (!a.done) label(c, "Now draw B at right angles", (q[0] + q[2]) / 2 + o, (q[1] + q[3]) / 2 + o);
                 break;
             case T_ARROW: {
                 c.drawLine(q[0], q[1], q[2], q[3], L);

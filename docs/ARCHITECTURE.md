@@ -1,6 +1,6 @@
 # Architecture
 
-*Insula DICOM Viewer 1.8.0*
+*Insula DICOM Viewer 1.9.0*
 
 Insula is a single-module Android app written in plain Java, with no Gradle and no third-party Android libraries. Its only bundled dependency is the JJ2000 JPEG 2000 decoder. All UI is built in code.
 
@@ -15,12 +15,16 @@ Insula is a single-module Android app written in plain Java, with no Gradle and 
    SettingsActivity    settings;  GuideActivity  in-app guide
    DicomView           one viewport: rendering, gestures, overlays, measurements
    MeasureBar          tool rail and selection bar;  Ui, Icons  components, icons
+   SwipePager          home-screen pages (Studies, Albums, Transfers) that follow a swipe
+   StudyType, Windows  study-type recognition, quick-tool profiles, window presets
+   StudyQuality, SmartUi   series quality report; hematoma and quality dialogs
  Imaging ────────────────────────────────────────────────────────────────────
    Dicom               PS3.10 parser (VRs, sequences, fragments), dictionary
    PixelDecoder        uncompressed, RLE, JPEG Lossless, JPEG (Android), palette, YBR
    J2k  →  ucar.jpeg.jj2000.*    JPEG 2000 frames
    RawImage            decoded frame + calibration; windowing to ARGB
    Volume              patient-space volume: resampling, slabs, curved, ray casting
+   Seg                 3D tissue separation, table removal, heart isolation, manual edits
    DicomWriter         Explicit VR LE writer for derived series
  Data ───────────────────────────────────────────────────────────────────────
    Library             import, study/series model, slice ordering, frame cache

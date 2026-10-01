@@ -29,7 +29,10 @@ public class VrtTest {
 
     static double sq(double a) { return a * a; }
 
-    static Vol3D phantom() {
+    static Vol3D phantom() { return phantom(0, false); }
+
+    /** @param fov radius (mm) of a circular field of view, 0 for none; outside it is scanner padding. @param table adds a CT table. */
+    static Vol3D phantom(double fov, boolean table) {
         Vol3D v = new Vol3D(NX, NY, NZ, 1, 1, 1, new double[]{-79.5, -69.5, -59.5}, true, 40, 400, -1024, 3071);
         truth = new byte[v.n()];
         fine = new byte[v.n()];
@@ -43,6 +46,7 @@ public class VrtTest {
             else { hu = 40; t = Seg.ORGAN; }
             if (t == Seg.ORGAN) {
                 if (sq((x - 35) / 28) + sq(y / 40) + sq((z - 10) / 50) < 1 || sq((x + 35) / 28) + sq(y / 40) + sq((z - 10) / 50) < 1) { hu = -850; t = Seg.LUNG; }
+                if (sq((x - 5) / 37) + sq((y + 15) / 33) + sq(z / 43) < 1) { hu = -90; t = Seg.SKIN; }                          // epicardial fat
                 if (sq((x - 5) / 32) + sq((y + 15) / 28) + sq(z / 38) < 1) { hu = 60; t = Seg.ORGAN; }                          // myocardium
                 if (sq((x - 10) / 18) + sq((y + 12) / 15) + sq(z / 25) < 1) { hu = 380; t = Seg.VESSEL; }                       // LV cavity
                 if (sq(x + 5) + sq(y + 25) < 144 && z > 10) { hu = 380; t = Seg.VESSEL; }                                     // ascending aorta
@@ -66,6 +70,8 @@ public class VrtTest {
                     }
                 }
             }
+            if (table && y > 64.5 && y < 67.5 && Math.abs(x) < 60) { hu = 200; t = Seg.BG; }                                  // CT table
+            if (table && t == Seg.BG && hu < -990 && y > 55 && y <= 64.5 && Math.abs(x) < 60) { hu = -900; t = Seg.BG; }     // mattress foam
             int x0 = v.idx(i, j, k);
             sharp[x0] = (float) hu;
             truth[x0] = (byte) t;
@@ -83,6 +89,10 @@ public class VrtTest {
             float[] tmp = a; a = b; b = tmp;
         }
         for (int x0 = 0; x0 < a.length; x0++) v.hu[x0] = (short) Math.round(a[x0] + (a[x0] > -990 ? rnd.nextGaussian() * 18 : 0));
+        if (fov > 0) for (int k = 0; k < NZ; k++) for (int j = 0; j < NY; j++) for (int i = 0; i < NX; i++) {
+            double x = -79.5 + i, y = -69.5 + j;
+            if (x * x + y * y > fov * fov) { int x0 = v.idx(i, j, k); v.hu[x0] = -2048; truth[x0] = Seg.BG; fine[x0] = 0; }   // scanner padding
+        }
         return v;
     }
 
@@ -99,6 +109,33 @@ public class VrtTest {
                     && fine[x - v.nx * v.ny] == code && fine[x + v.nx * v.ny] == code) { in++; if (ok) inOk++; }
         }
         return new double[]{inOk / (double) Math.max(1, in), allOk / (double) Math.max(1, all)};
+    }
+
+    static String pct(double f) { return String.format("%.1f%%", f * 100); }
+
+    /** Fractions kept (visible) or hidden after heart isolation:
+     *  {chambers kept, coronary+plaque kept, myocardium kept, bone hidden, lung hidden, front chest wall hidden}. */
+    static double[] isolationStats(Vol3D v) {
+        long[] n = new long[6], ok = new long[6];
+        for (int k = 0; k < NZ; k++) for (int j = 0; j < NY; j++) for (int i = 0; i < NX; i++) {
+            double x = -79.5 + i, y = -69.5 + j, z = -59.5 + k;
+            int x0 = v.idx(i, j, k);
+            boolean hidden = (v.labels[x0] & 0x80) != 0 || v.labels[x0] == Seg.BG;
+            int c = -1;
+            if (sq((x - 10) / 16) + sq((y + 12) / 13) + sq(z / 23) < 1) c = 0;
+            else if (fine[x0] == T_COR || fine[x0] == T_PLAQUE) c = 1;
+            else if (truth[x0] == Seg.ORGAN && sq((x - 5) / 30) + sq((y + 15) / 26) + sq(z / 36) < 1) c = 2;
+            else if (truth[x0] == Seg.BONE) c = 3;
+            else if (truth[x0] == Seg.LUNG && sq((x - 35) / 26) + sq(y / 38) + sq((z - 10) / 48) < 1 || truth[x0] == Seg.LUNG && sq((x + 35) / 26) + sq(y / 38) + sq((z - 10) / 48) < 1) c = 4;
+            else if ((truth[x0] == Seg.ORGAN || truth[x0] == Seg.SKIN) && y < -50) c = 5;
+            if (c < 0) continue;
+            n[c]++;
+            boolean good = c <= 2 ? !hidden : hidden;
+            if (good) ok[c]++;
+        }
+        double[] r = new double[6];
+        for (int c = 0; c < 6; c++) r[c] = n[c] == 0 ? Double.NaN : ok[c] / (double) n[c];
+        return r;
     }
 
     static double recall(Vol3D v, int cls, int fineCode) {
@@ -153,7 +190,15 @@ public class VrtTest {
         check("ribs' blurred edges stay bone (no red rims), even where bone links to the aorta", ribsVessel < ribs * 0.03, String.format("%.1f%% of rib and sternum voxels labelled vessel", 100.0 * ribsVessel / ribs));
         double[] cor = centreline(v, T_COR);
         check("thin coronary artery: centreline kept as vessel", cor[0] >= 0.90, String.format("%.1f%% of centreline; %.1f%% including partial-volume edges", 100 * cor[0], 100 * cor[1]));
-        check("coronary calcification labelled calcium", share(v, T_PLAQUE, Seg.CALCIUM) >= 0.5, String.format("%.1f%%", 100 * share(v, T_PLAQUE, Seg.CALCIUM)));
+        long pc = 0, pcOk = 0;
+        for (int x0 = 0; x0 < v.n(); x0++) {
+            if (fine[x0] != T_PLAQUE) continue;
+            int i = x0 % NX, j = (x0 / NX) % NY, k = x0 / (NX * NY);
+            if (i == 0 || j == 0 || k == 0 || i == NX - 1 || j == NY - 1 || k == NZ - 1) continue;
+            if (fine[x0 - 1] != T_PLAQUE || fine[x0 + 1] != T_PLAQUE || fine[x0 - NX] != T_PLAQUE || fine[x0 + NX] != T_PLAQUE || fine[x0 - NX * NY] != T_PLAQUE || fine[x0 + NX * NY] != T_PLAQUE) continue;
+            pc++; if (v.labels[x0] == Seg.CALCIUM) pcOk++;
+        }
+        check("coronary calcification labelled calcium (core, as partial volume dilutes the edges)", pc > 0 && pcOk >= 0.9 * pc, pct(pcOk / (double) Math.max(1, pc)) + " of core; " + pct(share(v, T_PLAQUE, Seg.CALCIUM)) + " of all plaque voxels");
 
         // Manual edits
         byte[] before = v.labels.clone();
@@ -186,6 +231,45 @@ public class VrtTest {
         check("saved state restores camera, classes, clip, and parameters", back.name.equals("Coronary review") && Math.abs(back.cam.R[4] - st.cam.R[4]) < 1e-9
                 && !back.cls[Seg.BONE].visible && back.clipHi[2] == 0.8f && Math.abs(back.params.vessel - p.vessel) < 1e-9
                 && java.util.Arrays.equals(back.table(-1024, 3071), st.table(-1024, 3071)), "");
+
+        // Heart isolation (cardiac CTA)
+        byte[] keep = v.labels.clone();
+        Seg.IntList rm = Seg.isolateHeart(v, null);
+        Seg.Edit iso = Seg.set(v, "Isolate heart", rm, true, 0);
+        double[] hk = isolationStats(v);
+        check("heart isolation keeps the heart chambers", hk[0] >= 0.99, pct(hk[0]));
+        check("heart isolation keeps the coronary artery and its calcium", hk[1] >= 0.90, pct(hk[1]));
+        check("heart isolation keeps the myocardium", hk[2] >= 0.90, pct(hk[2]));
+        check("heart isolation hides spine, ribs, and sternum", hk[3] >= 0.99, pct(hk[3]) + " hidden");
+        check("heart isolation hides the lungs", hk[4] >= 0.99, pct(hk[4]) + " hidden");
+        check("heart isolation hides the front chest wall", hk[5] >= 0.90, pct(hk[5]) + " hidden");
+        Seg.undo(v, iso);
+        check("undo brings the whole chest back", java.util.Arrays.equals(keep, v.labels), "");
+
+        // Small circular field of view cutting through the lungs (as in cardiac CT), and a CT table
+        Vol3D sv = phantom(60, false);
+        Seg.segment(sv, Seg.estimate(sv), null);
+        check("small field of view: lungs cut by the edge stay lungs", recall(sv, Seg.LUNG, 0) >= 0.97, pct(recall(sv, Seg.LUNG, 0)));
+        long padAsTissue = 0;
+        for (int x = 0; x < sv.n(); x++) if (sv.hu[x] <= -2000 && sv.labels[x] != Seg.BG) padAsTissue++;
+        check("small field of view: scanner padding is background", padAsTissue == 0, padAsTissue + " voxels");
+        Vol3D tv = phantom(0, true);
+        Seg.segment(tv, Seg.estimate(tv), null);
+        long tableLeft = 0, tableAll = 0;
+        for (int k = 0; k < NZ; k++) for (int j = 0; j < NY; j++) for (int i = 0; i < NX; i++) {
+            double x = -79.5 + i, y = -69.5 + j;
+            if (y > 64.5 && y < 66.5 && Math.abs(x) < 58) { tableAll++; if (tv.labels[tv.idx(i, j, k)] != Seg.BG) tableLeft++; }
+        }
+        check("CT table removed automatically", tableAll > 0 && tableLeft == 0, tableLeft + " of " + tableAll + " table voxels left");
+        long foam = 0, foamLeft = 0;
+        for (int k = 0; k < NZ; k++) for (int j = 0; j < NY; j++) for (int i = 0; i < NX; i++) {
+            double x = -79.5 + i, y = -69.5 + j;
+            if (y > 58 && y < 64 && Math.abs(x) < 55 && sq(x / 75) + sq(y / 62) >= 1.08) { foam++; if (tv.labels[tv.idx(i, j, k)] != Seg.BG) foamLeft++; }
+        }
+        check("mattress foam isn't shown as lung", foam > 0 && foamLeft <= foam / 100, foamLeft + " of " + foam + " foam voxels left");
+        check("table removal keeps the body", recall(tv, Seg.BONE, 0) >= 0.95 && recall(tv, Seg.ORGAN, 0) >= 0.9, "bone " + pct(recall(tv, Seg.BONE, 0)) + ", soft tissue " + pct(recall(tv, Seg.ORGAN, 0)));
+        v = phantom();
+        Seg.segment(v, p, null);
 
         // CPU renders, exported for the GPU comparison
         JSONArray cases = new JSONArray();

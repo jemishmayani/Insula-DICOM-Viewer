@@ -81,6 +81,29 @@ public class SettingsActivity extends BaseActivity {
             public void onCheckedChanged(CompoundButton x, boolean on) { put("teacher", on); }
         });
 
+        g = Ui.group(this, c, "MPR");
+        final String[] layouts = {"Three planes (axial on top)", "Four views with 3D", "Single view"};
+        final int[] layoutIds = {MprActivity.LAYOUT_THREE, MprActivity.LAYOUT_FOUR, MprActivity.LAYOUT_ONE};
+        final TextView[] layRow = new TextView[1];
+        layRow[0] = (TextView) Ui.setting(this, g, "lay3v", Ui.C_TEAL, "Default layout", layouts[indexOf(layoutIds, Ui.prefs(this).getInt("mpr_layout", MprActivity.LAYOUT_THREE))], null, new View.OnClickListener() {
+            public void onClick(View v) {
+                new AlertDialog.Builder(SettingsActivity.this).setTitle("Default MPR layout").setItems(layouts, new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface d, int w) { Ui.prefs(SettingsActivity.this).edit().putInt("mpr_layout", layoutIds[w]).apply(); layRow[0].setText(layouts[w]); }
+                }).show();
+            }
+        })[1];
+        final TextView[] styleRow = new TextView[1];
+        styleRow[0] = (TextView) Ui.setting(this, g, "cube", Ui.C_TEAL, "3D view style", MprActivity.R3[Math.max(0, Math.min(3, Ui.prefs(this).getInt("mpr_3d_style", 0)))] + " (shown in the four-view layout)", null, new View.OnClickListener() {
+            public void onClick(View v) {
+                new AlertDialog.Builder(SettingsActivity.this).setTitle("3D view in MPR").setItems(MprActivity.R3, new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface d, int w) { Ui.prefs(SettingsActivity.this).edit().putInt("mpr_3d_style", w).apply(); styleRow[0].setText(MprActivity.R3[w] + " (shown in the four-view layout)"); }
+                }).show();
+            }
+        })[1];
+        Ui.settingSwitch(this, g, "link", Ui.C_TEAL, "Link plane rotation", "Tilting one crosshair line turns both other planes together. Off: only the plane you drag turns", Ui.prefs(this).getBoolean("mpr_link_planes", true), new CompoundButton.OnCheckedChangeListener() {
+            public void onCheckedChanged(CompoundButton x, boolean on) { Ui.prefs(SettingsActivity.this).edit().putBoolean("mpr_link_planes", on).apply(); }
+        });
+
         g = Ui.group(this, c, "Privacy and security");
         Ui.settingSwitch(this, g, "lock", Ui.C_GREEN, "App lock", "Ask for your PIN or biometrics when opening the app", pref("lock"), new CompoundButton.OnCheckedChangeListener() {
             public void onCheckedChanged(CompoundButton x, boolean on) { put("lock", on); if (on) App.unlocked = true; }
@@ -123,6 +146,8 @@ public class SettingsActivity extends BaseActivity {
 
     boolean pref(String k) { return Ui.prefs(this).getBoolean(k, false); }
     void put(String k, boolean v) { Ui.prefs(this).edit().putBoolean(k, v).apply(); }
+
+    static int indexOf(int[] a, int v) { for (int i = 0; i < a.length; i++) if (a[i] == v) return i; return 0; }
 
     void updateLabels() {
         long bytes = 0;

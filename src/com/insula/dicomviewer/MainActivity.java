@@ -60,6 +60,7 @@ public class MainActivity extends BaseActivity {
     static final String[] SORTS = {"Newest", "Oldest", "Patient name", "Modality", "Size"};
     final Handler h = new Handler(Looper.getMainLooper());
     int sort = 0, tab = 0;
+    SwipePager pager;
     String albumFilter;
     TextView titleView, sortView, statusView, emptyView, albumChip;
     EditText search;
@@ -68,13 +69,15 @@ public class MainActivity extends BaseActivity {
     final View[] tabBars = new View[3];
     View studiesPanel, albumsPanel, transfersPanel;
     ListView studyList, albumList, transferList;
-    TextView albumEmpty, transferEmpty;
+    View albumEmpty, transferEmpty;
+    TextView emptyTitle;
+    android.widget.ImageView emptyIcon;
     final List<Library.Study> shown = new ArrayList<>();
     final List<String> albumNames = new ArrayList<>();
     List<Store.Transfer> transfers = new ArrayList<>();
     StudyAdapter studyAdapter;
     BaseAdapter albumAdapter, transferAdapter;
-    ProgressDialog pd;
+    Ui.Busy pd;
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
@@ -132,7 +135,10 @@ public class MainActivity extends BaseActivity {
         }
         main.addView(tabs);
 
-        FrameLayout content = new FrameLayout(this);
+        // Studies, Albums, and Transfers side by side: swipe between them or tap a tab.
+        pager = new SwipePager(this);
+        pager.listener = new SwipePager.Listener() { public void onPage(int p) { showTabState(p); } };
+        FrameLayout content = pager;
         main.addView(content, Ui.vweight(1));
         studiesPanel = buildStudies();
         albumsPanel = buildAlbums();
@@ -220,7 +226,18 @@ public class MainActivity extends BaseActivity {
         emptyPanel = Ui.col(this);
         emptyPanel.setGravity(Gravity.CENTER);
         emptyPanel.setPadding(Ui.dp(this, 32), 0, Ui.dp(this, 32), Ui.dp(this, 60));
-        emptyView = Ui.text(this, "", 16, Ui.SUB);
+        LinearLayout badge = Ui.row(this);
+        badge.setGravity(Gravity.CENTER);
+        badge.setBackground(Ui.rounded(Ui.CARD, Ui.dp(this, 40)));
+        emptyIcon = Ui.iconView(this, "empty", 36, Ui.SUB);
+        badge.addView(emptyIcon);
+        emptyPanel.addView(badge, new LinearLayout.LayoutParams(Ui.dp(this, 80), Ui.dp(this, 80)));
+        emptyTitle = Ui.text(this, "", 18, Ui.TEXT);
+        emptyTitle.setGravity(Gravity.CENTER);
+        emptyTitle.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
+        emptyTitle.setPadding(0, Ui.dp(this, 16), 0, Ui.dp(this, 6));
+        emptyPanel.addView(emptyTitle);
+        emptyView = Ui.text(this, "", 15, Ui.SUB);
         emptyView.setGravity(Gravity.CENTER);
         emptyPanel.addView(emptyView);
         emptyActions = Ui.col(this);
@@ -269,10 +286,8 @@ public class MainActivity extends BaseActivity {
             public boolean onItemLongClick(AdapterView<?> a, View v, int pos, long id) { albumOptions(albumNames.get(pos)); return true; }
         });
         f.addView(albumList);
-        albumEmpty = Ui.text(this, "Albums keep related studies together, such as teaching cases or a patient's follow-ups.\n\nLong-press a study to add it to an album.", 16, Ui.SUB);
-        albumEmpty.setGravity(Gravity.CENTER);
-        albumEmpty.setPadding(Ui.dp(this, 36), 0, Ui.dp(this, 36), Ui.dp(this, 60));
-        f.addView(albumEmpty, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        albumEmpty = Ui.empty(this, "album", "No albums yet", "Albums keep related studies together, such as teaching cases or one patient's follow-ups. Long-press a study and choose Add to album.", null, null);
+        f.addView(albumEmpty, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
         p.addView(f, Ui.vweight(1));
         return p;
     }
@@ -302,10 +317,8 @@ public class MainActivity extends BaseActivity {
         };
         transferList.setAdapter(transferAdapter);
         f.addView(transferList);
-        transferEmpty = Ui.text(this, "Imports, downloads, and exports appear here.", 16, Ui.SUB);
-        transferEmpty.setGravity(Gravity.CENTER);
-        transferEmpty.setPadding(Ui.dp(this, 36), 0, Ui.dp(this, 36), Ui.dp(this, 60));
-        f.addView(transferEmpty, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        transferEmpty = Ui.empty(this, "download", "Nothing transferred yet", "Imports, PACS downloads, and exports appear here with their size, speed, and any problems.", "Import studies", new View.OnClickListener() { public void onClick(View v) { importSheet(); } });
+        f.addView(transferEmpty, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
         p.addView(f, Ui.vweight(1));
         return p;
     }
@@ -328,16 +341,24 @@ public class MainActivity extends BaseActivity {
     static final String[] TAB_NAMES = {"Studies", "Albums", "Transfers"};
 
     void setTab(int t) {
+        if (pager != null) pager.setPage(t, pager.getWidth() > 0 && t != tab);
+        showTabState(t);
+    }
+
+    /** Tab underline and contents for page t (after a tap or a swipe). */
+    void showTabState(int t) {
+        boolean changed = t != tab;
         tab = t;
         for (int i = 0; i < 3; i++) {
             tabLabels[i].setTextColor(i == t ? Ui.TEXT : Ui.SUB);
             tabBars[i].setVisibility(i == t ? View.VISIBLE : View.INVISIBLE);
         }
-        studiesPanel.setVisibility(t == 0 ? View.VISIBLE : View.GONE);
-        albumsPanel.setVisibility(t == 1 ? View.VISIBLE : View.GONE);
-        transfersPanel.setVisibility(t == 2 ? View.VISIBLE : View.GONE);
-        refresh();
+        // All three pages are kept up to date, so changing page needs no list refresh (which caused a relayout
+        // flicker as the slide finished). Only the first call refreshes.
+        if (!changed && !shownOnce) { shownOnce = true; refresh(); }
     }
+
+    boolean shownOnce;
 
     void toggleSearch() {
         InputMethodManager im = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
@@ -386,9 +407,12 @@ public class MainActivity extends BaseActivity {
         albumChip.setVisibility(albumFilter == null ? View.GONE : View.VISIBLE);
         albumChip.setText("Album: " + albumFilter + "  ✕");
         statusView.setText(shown.isEmpty() ? "" : shown.size() + " stud" + (shown.size() == 1 ? "y" : "ies"));
-        if (!Library.scanned) emptyView.setText("Loading library…");
-        else if (all.isEmpty()) emptyView.setText("No studies yet.\n\nImport DICOM files, a ZIP, or a folder copied from a patient CD, download from a PACS, or explore the demo study.");
-        else if (shown.isEmpty()) emptyView.setText(albumFilter != null && q.isEmpty() ? "This album is empty. Long-press a study to add it." : "No studies match your search.");
+        if (!Library.scanned) setEmpty("layers", "Loading your library", "Reading the studies stored on this phone.");
+        else if (all.isEmpty()) setEmpty("empty", "No studies yet", "Import DICOM files, a ZIP, or a folder copied from a patient CD, download from a hospital PACS, or explore the demo study.");
+        else if (shown.isEmpty()) {
+            if (albumFilter != null && q.isEmpty()) setEmpty("album", "This album is empty", "Long-press a study in the list and choose Add to album.");
+            else setEmpty("search", "No matching studies", "Nothing matches \u201c" + q + "\u201d. Search looks at names, IDs, descriptions, accession numbers, modalities, and dates. Try fewer letters.");
+        }
         emptyPanel.setVisibility(shown.isEmpty() ? View.VISIBLE : View.GONE);
         emptyActions.setVisibility(Library.scanned && all.isEmpty() ? View.VISIBLE : View.GONE);
 
@@ -501,6 +525,12 @@ public class MainActivity extends BaseActivity {
         }.start();
     }
 
+    void setEmpty(String icon, String title, String body) {
+        emptyIcon.setImageDrawable(new Icons(icon, Ui.SUB));
+        emptyTitle.setText(title);
+        emptyView.setText(body);
+    }
+
     void pickFiles() {
         Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         i.addCategory(Intent.CATEGORY_OPENABLE);
@@ -529,8 +559,8 @@ public class MainActivity extends BaseActivity {
         }
     }
 
-    ProgressDialog progress(String msg) {
-        ProgressDialog d = new ProgressDialog(this);
+    Ui.Busy progress(String msg) {
+        Ui.Busy d = new Ui.Busy(this);
         d.setMessage(msg);
         d.setCancelable(false);
         d.show();
@@ -640,7 +670,7 @@ public class MainActivity extends BaseActivity {
                     Library.importStream(in, st, null);
                     in.close();
                     c.disconnect();
-                } catch (Exception e) { err = e.getMessage(); }
+                } catch (Exception e) { err = Ui.friendly(e); }
                 final String fe = err;
                 String host = url;
                 try { host = new URL(url).getHost(); } catch (Exception ignored) { }
@@ -806,7 +836,7 @@ public class MainActivity extends BaseActivity {
                 final File out = new File(Library.exportDir, "anonymized_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.ROOT).format(new Date()) + ".zip");
                 String err = null;
                 int n = 0;
-                try { n = Anonymizer.writeZip(files, out, warn, null); } catch (Exception e) { err = e.getMessage(); }
+                try { n = Anonymizer.writeZip(files, out, warn, null); } catch (Exception e) { err = Ui.friendly(e); }
                 final String fe = err;
                 final int fn = n;
                 Store.log(MainActivity.this, "share", "Anonymized export", fe == null ? fn + " images, " + Library.fmtSize(out.length()) : "Failed: " + fe, fe == null && fn > 0);

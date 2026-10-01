@@ -552,4 +552,176 @@ final class Ui {
         parent.addView(box);
         return sb;
     }
+
+    // ---------------- progress, empty states, errors, icon bars ----------------
+
+    /**
+     * Progress dialog with a real progress bar. Replaces the old spinner dialog; a percentage in the message
+     * (for example "Building volume… 45%") drives the bar, otherwise it animates until done.
+     */
+    static final class Busy extends android.app.Dialog {
+        final TextView msg, pct;
+        final android.widget.ProgressBar bar;
+        final LinearLayout buttons;
+
+        Busy(Context c) {
+            super(c);
+            requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
+            LinearLayout card = col(c);
+            card.setBackground(rounded(CARD, dp(c, 18)));
+            int p = dp(c, 22);
+            card.setPadding(p, p, p, dp(c, 14));
+            msg = text(c, "", 15.5f, TEXT);
+            card.addView(msg);
+            bar = new android.widget.ProgressBar(c, null, android.R.attr.progressBarStyleHorizontal);
+            bar.setMax(100);
+            bar.setIndeterminate(true);
+            bar.setProgressTintList(android.content.res.ColorStateList.valueOf(ACCENT));
+            bar.setIndeterminateTintList(android.content.res.ColorStateList.valueOf(ACCENT));
+            LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, dp(c, 10));
+            bl.topMargin = dp(c, 16);
+            card.addView(bar, bl);
+            pct = text(c, "", 12.5f, SUB);
+            pct.setPadding(0, dp(c, 6), 0, 0);
+            card.addView(pct);
+            buttons = row(c);
+            buttons.setGravity(Gravity.END);
+            card.addView(buttons, new LinearLayout.LayoutParams(-1, -2));
+            setContentView(card);
+            if (getWindow() != null) {
+                getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0));
+                getWindow().setLayout(Math.min(dp(c, 360), c.getResources().getDisplayMetrics().widthPixels - dp(c, 48)), -2);
+            }
+        }
+
+        void setMessage(CharSequence m) {
+            String s = m == null ? "" : m.toString();
+            java.util.regex.Matcher mt = java.util.regex.Pattern.compile("(\\d{1,3})\\s*%").matcher(s);
+            if (mt.find()) {
+                int v = Math.min(100, Integer.parseInt(mt.group(1)));
+                bar.setIndeterminate(false);
+                bar.setProgress(v);
+                pct.setText(v + "% done");
+                s = s.substring(0, mt.start()).trim();
+            } else pct.setText("");
+            msg.setText(s);
+        }
+
+        void setButton(int which, CharSequence label, final android.content.DialogInterface.OnClickListener l) {
+            TextView b = text(getContext(), label.toString(), 15, VALUE);
+            b.setPadding(dp(getContext(), 14), dp(getContext(), 10), dp(getContext(), 4), dp(getContext(), 4));
+            final int w = which;
+            b.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { if (l != null) l.onClick(Busy.this, w); } });
+            buttons.addView(b);
+        }
+    }
+
+    /** Friendly empty state: icon, title, explanation, and an optional action. */
+    static LinearLayout empty(Context c, String icon, String title, String body, String action, View.OnClickListener l) {
+        LinearLayout v = col(c);
+        v.setGravity(Gravity.CENTER_HORIZONTAL);
+        v.setPadding(dp(c, 32), dp(c, 40), dp(c, 32), dp(c, 40));
+        LinearLayout badge = row(c);
+        badge.setGravity(Gravity.CENTER);
+        badge.setBackground(rounded(CARD, dp(c, 40)));
+        badge.addView(iconView(c, icon, 36, SUB));
+        v.addView(badge, new LinearLayout.LayoutParams(dp(c, 80), dp(c, 80)));
+        TextView t = text(c, title, 18, TEXT);
+        t.setGravity(Gravity.CENTER);
+        t.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        t.setPadding(0, dp(c, 16), 0, dp(c, 6));
+        v.addView(t);
+        TextView b = text(c, body, 14.5f, SUB);
+        b.setGravity(Gravity.CENTER);
+        b.setLineSpacing(0, 1.15f);
+        v.addView(b);
+        if (action != null && l != null) {
+            LinearLayout.LayoutParams al = new LinearLayout.LayoutParams(-2, -2);
+            al.topMargin = dp(c, 18);
+            v.addView(pill(c, action, null, l), al);
+        }
+        return v;
+    }
+
+    /** Turns a failure into a message that says what happened and what to try. */
+    static String friendly(Throwable t) {
+        if (t == null) return "Something went wrong.";
+        if (t instanceof OutOfMemoryError) return "Not enough memory on this phone for that. Close other apps and try again, or choose a lower quality.";
+        if (t instanceof java.io.FileNotFoundException) return "The file is no longer available. It may have been moved or deleted.";
+        if (t instanceof java.net.UnknownHostException) return "Can't reach the server. Check the internet connection or VPN.";
+        if (t instanceof java.net.SocketTimeoutException) return "The server took too long to answer. Try again, or check the connection.";
+        if (t instanceof javax.net.ssl.SSLException) return "A secure connection couldn't be made. Check the server address and its certificate.";
+        if (t instanceof java.util.zip.ZipException) return "This ZIP file is damaged or incomplete.";
+        if (t instanceof ArrayIndexOutOfBoundsException || t instanceof NegativeArraySizeException || t instanceof java.nio.BufferUnderflowException)
+            return "This image couldn't be read. The file may be damaged, truncated, or use an unusual encoding.";
+        String m = t.getMessage();
+        if (m == null || m.trim().isEmpty()) return "Something went wrong (" + t.getClass().getSimpleName() + "). Try again; if it keeps happening, report it from About.";
+        return m;
+    }
+
+    /** A row of icon buttons; long-press any icon to see what it does. */
+    static LinearLayout iconBar(Context c, String[] icons, String[] labels, final OnChoice cb) {
+        LinearLayout bar = row(c);
+        bar.setGravity(Gravity.CENTER);
+        bar.setBackground(rounded(0xF22A2A2E, dp(c, 28)));
+        bar.setElevation(dp(c, 8));
+        bar.setPadding(dp(c, 6), dp(c, 6), dp(c, 6), dp(c, 6));
+        for (int i = 0; i < icons.length; i++) {
+            final int k = i;
+            ImageButton b = toolBtn(c, icons[i], labels[i], new View.OnClickListener() { public void onClick(View v) { cb.choose(k); } });
+            bar.addView(b);
+        }
+        return bar;
+    }
+
+    /** Lays children out in rows, wrapping to the next row when one is full. */
+    static final class Flow extends ViewGroup {
+        final int gapH, gapV;
+        Flow(Context c) { super(c); gapH = dp(c, 8); gapV = dp(c, 8); }
+
+        @Override protected void onMeasure(int wSpec, int hSpec) {
+            int width = MeasureSpec.getSize(wSpec), x = 0, y = 0, rowH = 0;
+            for (int i = 0; i < getChildCount(); i++) {
+                View ch = getChildAt(i);
+                if (ch.getVisibility() == GONE) continue;
+                ch.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.AT_MOST), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED));
+                int cw = ch.getMeasuredWidth(), chh = ch.getMeasuredHeight();
+                if (x > 0 && x + cw > width) { x = 0; y += rowH + gapV; rowH = 0; }
+                x += cw + gapH;
+                rowH = Math.max(rowH, chh);
+            }
+            setMeasuredDimension(width, y + rowH);
+        }
+
+        @Override protected void onLayout(boolean changed, int l, int t, int r, int b) {
+            int width = r - l, x = 0, y = 0, rowH = 0;
+            for (int i = 0; i < getChildCount(); i++) {
+                View ch = getChildAt(i);
+                if (ch.getVisibility() == GONE) continue;
+                int cw = ch.getMeasuredWidth(), chh = ch.getMeasuredHeight();
+                if (x > 0 && x + cw > width) { x = 0; y += rowH + gapV; rowH = 0; }
+                ch.layout(x, y, x + cw, y + chh);
+                x += cw + gapH;
+                rowH = Math.max(rowH, chh);
+            }
+        }
+    }
+
+    /** A neutral action button (outlined, accent icon), distinct from the filled style used for switched-on tools. */
+    static LinearLayout actionChip(Context c, String label, String icon, View.OnClickListener l) {
+        LinearLayout r = row(c);
+        r.setGravity(Gravity.CENTER_VERTICAL);
+        r.setPadding(dp(c, 12), dp(c, 9), dp(c, 14), dp(c, 9));
+        android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable();
+        g.setColor(0x14FFFFFF);
+        g.setCornerRadius(dp(c, 12));
+        g.setStroke(Math.max(1, dp(c, 1)), 0x33FFFFFF);
+        r.setBackground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x33FFFFFF), g, null));
+        if (icon != null) r.addView(iconView(c, icon, 20, ACCENT));
+        TextView t = text(c, label, 14, TEXT);
+        t.setPadding(icon != null ? dp(c, 8) : 0, 0, 0, 0);
+        r.addView(t);
+        r.setOnClickListener(l);
+        return r;
+    }
 }

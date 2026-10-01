@@ -39,6 +39,8 @@ A fast, private DICOM viewer for Android phones and tablets: open studies from f
 - Sessions and captures saved into the study as DICOM; 36-view rotation series; quality chosen for the phone, with a CPU mode for older phones
 
 **Viewer**
+- Smart tools by study type: recognizes spine, CVJ, brain, cardiac CTA, CTA, CTPA, trauma, neck, chest, and abdomen studies and offers suited window presets, MPR planes, MIP/MinIP slabs, 3D, and measurement shortcuts (ADI, BDI, Chamberlain, McGregor, canal diameter, Cobb, midline shift, hematoma ABC/2) with reference values for guidance
+- Window presets strip with the brightness tool; Study quality report (spacing, gaps, resolution, compression, dose settings, measured noise)
 - Smooth scrolling (background decoding, direction-aware prefetch), flick to glide, a scrub bar, and long-press presets
 - One-tap quick bar; side-by-side comparison with prior studies and linked scrolling across studies
 - Remembered window settings per series; a synthetic demo study and welcome screen for first use
@@ -54,6 +56,8 @@ A fast, private DICOM viewer for Android phones and tablets: open studies from f
 - Measurements and key images are saved per image and travel with study sets
 
 **MPR and 3D**
+- Three planes with axial on top by default; link or unlink plane rotation; reset to axial, coronal, and sagittal
+- 3D heart isolation for cardiac CTA, automatic table and mattress removal, lungs kept in small fields of view
 - True axial, coronal, and sagittal planes for any acquisition direction, including gantry tilt
 - Oblique and double-oblique planes by rotating the crosshair
 - Thin, MIP, MinIP, and average slabs (2–80 mm)

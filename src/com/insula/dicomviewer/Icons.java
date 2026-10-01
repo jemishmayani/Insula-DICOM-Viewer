@@ -51,6 +51,19 @@ public final class Icons extends Drawable {
             case "crop": open(c, 6, 2.5f, 6, 18, 21.5f, 18); open(c, 2.5f, 6, 18, 6, 18, 21.5f); break;
             case "tissue": c.drawCircle(8.5f, 9, 5, p); c.drawCircle(15.5f, 9, 5, p); c.drawCircle(12, 15, 5, p); break;
             case "orbit": c.drawOval(new RectF(2.5f, 8, 21.5f, 16), p); fill(); c.drawCircle(12, 12, 2.6f, p); c.drawCircle(19.5f, 10.4f, 1.6f, p); break;
+            case "ptline": line(c, 3, 17, 21, 17); c.drawCircle(12, 6, 2.2f, p); dash(c, 12, 8.5f, 12, 17); line(c, 12, 15, 14, 15); line(c, 14, 15, 14, 17); break;
+            case "abc": line(c, 3.5f, 12, 20.5f, 12); line(c, 12, 4.5f, 12, 19.5f); c.drawOval(new RectF(5, 7, 19, 17), p); break;
+            case "plane-axial": closed(c, 2.5f, 15, 9, 9.5f, 21.5f, 9.5f, 15, 15); line(c, 12, 3, 12, 7); line(c, 12, 17, 12, 21); break;
+            case "plane-coronal": c.drawRect(new RectF(6.5f, 3.5f, 17.5f, 20.5f), p); line(c, 2.5f, 12, 6.5f, 12); line(c, 17.5f, 12, 21.5f, 12); break;
+            case "plane-sagittal": closed(c, 8, 3, 16, 7, 16, 21, 8, 17); line(c, 3, 12, 8, 12); line(c, 16, 12, 21, 12); break;
+            case "mip": c.drawRect(new RectF(4, 5, 20, 19), p); line(c, 7, 16, 10, 10); line(c, 10, 10, 13, 14); line(c, 13, 14, 17, 7); fill(); c.drawCircle(17, 7, 1.4f, p); break;
+            case "minip": c.drawRect(new RectF(4, 5, 20, 19), p); open(c, 12, 16, 12, 11, 8.5f, 8); open(c, 12, 11, 15.5f, 8); line(c, 12, 16, 12, 19); break;
+            case "keepin": dash(c, 3, 3, 21, 3); dash(c, 21, 3, 21, 21); dash(c, 21, 21, 3, 21); dash(c, 3, 21, 3, 3); fill(); c.drawRoundRect(new RectF(8, 8, 16, 16), 2, 2, p); break;
+            case "recolor": closed(c, 3, 12, 11, 4, 20, 4, 20, 13, 12, 21); fill(); c.drawCircle(15.5f, 8.5f, 1.6f, p); break;
+            case "smart": closed(c, 12, 3, 13.9f, 9.2f, 20, 11, 13.9f, 12.8f, 12, 19, 10.1f, 12.8f, 4, 11, 10.1f, 9.2f); line(c, 18.5f, 3, 18.5f, 7); line(c, 16.5f, 5, 20.5f, 5); break;
+            case "quality": closed(c, 12, 2.5f, 19.5f, 5.5f, 19.5f, 12, 12, 21.5f, 4.5f, 12, 4.5f, 5.5f); open(c, 8.5f, 12, 11, 14.5f, 15.5f, 9.5f); break;
+            case "unlink": open(c, 10, 8, 7.5f, 5.5f, 4.5f, 5.5f, 3, 7, 3, 10, 5.5f, 12.5f); open(c, 14, 16, 16.5f, 18.5f, 19.5f, 18.5f, 21, 17, 21, 14, 18.5f, 11.5f); line(c, 4, 20, 8, 16); line(c, 16, 8, 20, 4); break;
+            case "empty": c.drawRoundRect(new RectF(3.5f, 6, 20.5f, 19.5f), 2, 2, p); open(c, 3.5f, 10, 9, 10, 10.5f, 12.5f, 13.5f, 12.5f, 15, 10, 20.5f, 10); break;
             case "play": fill(); closed(c, 7, 4.5f, 19.5f, 12, 7, 19.5f); break;
             case "pause": fill(); c.drawRoundRect(new RectF(6, 5, 10, 19), 1, 1, p); c.drawRoundRect(new RectF(14, 5, 18, 19), 1, 1, p); break;
             case "compare": c.drawRoundRect(new RectF(2.5f, 5, 11, 19), 1.5f, 1.5f, p); c.drawRoundRect(new RectF(13, 5, 21.5f, 19), 1.5f, 1.5f, p); line(c, 5.5f, 12, 8, 12); line(c, 16, 12, 18.5f, 12); break;
@@ -175,6 +188,16 @@ public final class Icons extends Drawable {
     void stroke() { p.setStyle(Paint.Style.STROKE); }
     void frame(Canvas c) { c.drawRoundRect(new RectF(4, 4, 20, 20), 2, 2, p); }
     void line(Canvas c, float a, float b, float x, float y) { c.drawLine(a, b, x, y, p); }
+    /** Dashed line drawn as short segments. */
+    void dash(Canvas c, float a, float b, float x, float y) {
+        float len = (float) Math.hypot(x - a, y - b), on = 2.2f, off = 1.8f;
+        if (len < 1e-3f) return;
+        float ux = (x - a) / len, uy = (y - b) / len;
+        for (float t = 0; t < len; t += on + off) {
+            float e = Math.min(len, t + on);
+            c.drawLine(a + ux * t, b + uy * t, a + ux * e, b + uy * e, p);
+        }
+    }
     void open(Canvas c, float... v) { c.drawPath(path(v, false), p); }
     void closed(Canvas c, float... v) { c.drawPath(path(v, true), p); }
     static Path path(float[] v, boolean close) {

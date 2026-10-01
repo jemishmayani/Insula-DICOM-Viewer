@@ -1,6 +1,6 @@
 # User guide
 
-*Insula DICOM Viewer 1.8.0*
+*Insula DICOM Viewer 1.9.0*
 
 The same information is in the app under **Settings › Guide**, with search. Long-press any icon in the app to see its name.
 
@@ -94,6 +94,12 @@ Slices load in the background, so scrolling never pauses for a slow image: the p
 **Remembered window settings.** When you change brightness or contrast (Window tool or a preset), the setting is saved for that series and used the next time you open it. **Reset** forgets it. Turn this off in Settings › Viewer.
 
 **Window presets:** Brain (W 80 / L 40), Subdural (215/75), Stroke (40/40), Temporal bone (2800/600), Lung (1500/−600), Mediastinum (350/50), Abdomen (400/40), Liver (150/60), Bone (1800/400), Angio (600/300), plus the file's default and full range.
+
+### Smart tools for the study type
+
+Insula recognizes the kind of study from its descriptions (for example CT cervical spine, CT brain, coronary CTA). **Smart**, the first button in the quick bar, shows the recognized type and opens tools suited to it: window presets, MPR planes, MIP and MinIP slabs, measurements, and 3D. Measurement shortcuts such as ADI, BDI, midline shift, and hematoma volume show where to measure and, afterwards, a commonly cited reference value (for guidance only).
+
+With the **Window** tool, a row of presets appears above the quick bar. **Study quality** (Tools menu or Smart) reports slice spacing, gaps, resolution, compression, dose settings, and noise, with verdicts for MPR and 3D.
 
 ### Comparing with a prior study
 

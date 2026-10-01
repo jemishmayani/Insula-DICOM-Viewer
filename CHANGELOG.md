@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.9.0
+- **Smart tools by study type:** recognizes cervical spine, CVJ, spine, brain, cardiac/coronary CTA, CTA, CTPA, trauma, neck, chest, and abdomen from the study and series descriptions, body part, protocol, and contrast. The Smart button in the quick bar offers suited window presets, MPR planes, MIP/MinIP/thin-MIP slabs, measurements, and 3D (for example 3D bone for spine and trauma)
+- **Measurement shortcuts** with how-to guidance and commonly cited reference values (for guidance only): ADI, BDI, Chamberlain, McGregor, canal diameter, vertebral body height, Cobb, midline shift, and hematoma volume
+- **New measurements:** point to line (perpendicular distance) and hematoma volume (ABC/2)
+- **Window presets strip** whenever the brightness tool is on, in the viewer and MPR, chosen for the study type; more presets (posterior fossa, sinus, neck, spine, soft tissue, pulmonary embolism, blood/hematoma)
+- **MPR:** three planes with axial on top is the default layout; Settings › MPR sets the layout, the 3D view style, and plane linking. A link button chooses whether tilting a line turns both other planes or only that one; a Reset button restores axial, coronal, and sagittal
+- **3D tissue separation:** lungs are kept where a small field of view cuts through them (cardiac CT); the CT table and mattress are removed; heart isolation for cardiac CTA (automatic, undoable) keeps the heart, great vessels, coronaries, and myocardium and hides chest wall, spine, ribs, lungs, and pulmonary vessels
+- **3D Cut:** an icon bar replaces the text menu; long-press an icon to see what it does
+- **Study quality:** slice spacing and gaps, pixel size, voxel shape, compression, acquisition settings, and a measured noise estimate, with verdicts for MPR and 3D
+- Viewer menu: Scroll, Brightness, and Measure removed (they are in the quick bar); Quick tools and Study quality added
+- Clearer empty screens, progress bars with percentages, and plain-language error messages
+- New app icon: stacked image slices with an axial brain, the front slice highlighted
+- Home screen: swipe between Studies, Albums, and Transfers
+- Smart tools: neutral action buttons that wrap onto new rows (no longer look like switched-on toggles); MR studies no longer offer CT windows or 3D skull
+- Measurement shortcuts: the result bar updates while you edit the measurement, shows the hematoma volume once the slice count is entered, and closes if the measurement is deleted
+- Tests: study-type recognition and profiles, presets, point-to-line geometry, Study Quality (noise estimate within 0.2 HU of the phantom), heart isolation, small field of view, table and mattress removal
+
 ## 1.8.0
 - **3D VRT**, a separate mode (quick bar › 3D, a thumbnail's long-press menu, or MPR › Open in 3D VRT):
   - GPU ray casting with OpenGL ES 3.0 (volume as a half-float 3D texture, tissue classes as a label texture, per-class transfer functions), rendered at reduced resolution while dragging and sharpened on release

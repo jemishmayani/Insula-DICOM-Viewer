@@ -42,6 +42,9 @@ import java.util.concurrent.Executors;
 
 public class MprActivity extends BaseActivity implements DicomView.Listener, DicomView.Hook {
     static final String[] NAMES = {"Axial", "Coronal", "Sagittal"};
+    static final String EXTRA_PLANE = "plane", EXTRA_SLAB_MODE = "slabMode", EXTRA_SLAB_MM = "slabMm";
+    /** Layouts: 0 four views with 3D, 1 three planes (axial on top), 2 single view. */
+    static final int LAYOUT_FOUR = 0, LAYOUT_THREE = 1, LAYOUT_ONE = 2;
     static final int[] COLORS = {0xFFEF5350, 0xFF66BB6A, 0xFFFFCA28, 0xFF42A5F5};
     static final int CPR_COLOR = 0xFF4DD0E1, MAXPX = 512, CPR_PAGES = 41;
     static final String[] MODES = {"Thin", "MIP", "MinIP", "Average"};
@@ -71,9 +74,14 @@ public class MprActivity extends BaseActivity implements DicomView.Listener, Dic
     Ui.Sheet drawer;
     Ui.Segmented layoutSeg;
     final Handler h = new Handler(Looper.getMainLooper());
-    ProgressDialog pd;
+    Ui.Busy pd;
     // drag state
     int dragMode;          // 0 move, 1 rotate
+    int grabPlane = -1;    // plane whose line was grabbed, for unlinked rotation
+    boolean linkPlanes = true;
+    View linkBtn, presetScroll;
+    LinearLayout presetRow;
+    final List<Button> modeBtnsF = new ArrayList<>(), thickBtnsF = new ArrayList<>(), r3BtnsF = new ArrayList<>();
     double lastAng;
     float lastSx, lastSy, downSx, downSy;
     // 3D rendering state
@@ -85,7 +93,7 @@ public class MprActivity extends BaseActivity implements DicomView.Listener, Dic
         super.onCreate(b);
         series = Library.series(getIntent().getStringExtra("series"));
         if (series == null) { finish(); return; }
-        pd = new ProgressDialog(this);
+        pd = new Ui.Busy(this);
         pd.setMessage("Building volume…");
         pd.setCancelable(false);
         pd.show();
@@ -99,7 +107,7 @@ public class MprActivity extends BaseActivity implements DicomView.Listener, Dic
                         }
                     });
                 } catch (OutOfMemoryError e) { Library.clearCache(); err = "Not enough memory to build this volume."; }
-                catch (Exception e) { err = e.getMessage(); }
+                catch (Exception e) { err = Ui.friendly(e); }
                 final String fe = err;
                 h.post(new Runnable() {
                     public void run() {
@@ -171,6 +179,12 @@ public class MprActivity extends BaseActivity implements DicomView.Listener, Dic
         palette.setVisibility(View.GONE);
         main.addView(palette);
 
+        presetRow = Ui.row(this);
+        presetRow.setPadding(Ui.dp(this, 8), Ui.dp(this, 6), Ui.dp(this, 8), Ui.dp(this, 2));
+        presetScroll = Ui.hscroll(this, presetRow);
+        presetScroll.setVisibility(View.GONE);
+        main.addView(presetScroll);
+
         LinearLayout tools = Ui.row(this);
         tools.setPadding(Ui.dp(this, 6), Ui.dp(this, 4), Ui.dp(this, 6), Ui.dp(this, 6));
         addTool(tools, "target", "Crosshair: move and rotate planes", DicomView.T_CROSS);
@@ -183,6 +197,12 @@ public class MprActivity extends BaseActivity implements DicomView.Listener, Dic
         tools.addView(meas);
         tools.addView(Ui.toolBtn(this, "cube", "3D view options", new View.OnClickListener() { public void onClick(View v) { drawer.open(); } }));
         tools.addView(Ui.toolBtn(this, "maximize", "Maximize selected view", new View.OnClickListener() { public void onClick(View v) { maximize(maximized >= 0 ? -1 : active); } }));
+        tools.addView(Ui.vsep(this));
+        linkPlanes = Ui.prefs(this).getBoolean("mpr_link_planes", true);
+        linkBtn = Ui.toolBtn(this, linkPlanes ? "link" : "unlink", "Link planes: tilt both other planes together, or only the one you drag", new View.OnClickListener() { public void onClick(View v) { setLinkPlanes(!linkPlanes); } });
+        Ui.setToolOn(linkBtn, linkPlanes);
+        tools.addView(linkBtn);
+        tools.addView(Ui.toolBtn(this, "reset", "Reset planes to axial, coronal, and sagittal", new View.OnClickListener() { public void onClick(View v) { resetOrientation(); Ui.toast(MprActivity.this, "Planes reset."); } }));
         main.addView(Ui.hscroll(this, tools));
 
         int w = Math.min(Ui.dp(this, 380), (int) (getResources().getDisplayMetrics().widthPixels * 0.86f));
@@ -195,16 +215,30 @@ public class MprActivity extends BaseActivity implements DicomView.Listener, Dic
         }
         views[3].setProvider(prov3d, 0);
         views[3].wlOnRgb = true;
-        applyLayout(0);
+        int plane = getIntent().getIntExtra(EXTRA_PLANE, -1);
+        int lay = Ui.prefs(this).getInt("mpr_layout", LAYOUT_THREE);
+        if (plane >= 0 && plane < 3) { active = plane; maximized = plane; }
+        int style = Ui.prefs(this).getInt("mpr_3d_style", 0);
+        if (style > 0 && style < r3BtnsF.size()) { for (int j = 0; j < r3BtnsF.size(); j++) Ui.setOn(r3BtnsF.get(j), j == style); set3DMode(style); }
+        int sm = getIntent().getIntExtra(EXTRA_SLAB_MODE, -1);
+        if (sm > 0) {
+            slabMode = sm;
+            slabMm = getIntent().getDoubleExtra(EXTRA_SLAB_MM, 10);
+            for (int j = 0; j < modeBtnsF.size(); j++) Ui.setOn(modeBtnsF.get(j), j == sm);
+            double[] mmOpts = {2, 5, 10, 20, 40, 80};
+            for (int j = 0; j < thickBtnsF.size(); j++) Ui.setOn(thickBtnsF.get(j), mmOpts[j] == slabMm);
+            refreshPlanes();
+        }
+        applyLayout(lay);
         selectTool(DicomView.T_CROSS);
-        setActive(0);
+        setActive(plane >= 0 && plane < 3 ? plane : 0);
         updateCross();
         render3D(false);
         if (vol.downsample > 1) Ui.toast(this, "Large series: reconstructed at 1/" + vol.downsample + " in-plane resolution to fit in memory.");
         else if (vol.unevenSpacing) Ui.toast(this, "Slice spacing in this series is uneven, so reconstructions may be slightly distorted.");
         if (!Ui.prefs(this).getBoolean("mpr_hint", false)) {
             new AlertDialog.Builder(this).setTitle("Using MPR")
-                    .setMessage("Drag the crosshair center to move through the volume.\n\nDrag a colored dot on a line to tilt the other planes (oblique MPR).\n\nThe fourth view is 3D; drag to rotate it. Switch it to curved MPR with Draw curve.\n\nThe menu at the top right has slab MIP, layouts, 3D presets, and saving reformats as a new series.")
+                    .setMessage("Drag the crosshair center to move through the volume.\n\nDrag a colored dot on a line to tilt planes (oblique MPR). The link button in the toolbar chooses whether both other planes turn together or only the one you drag; Reset returns to axial, coronal, and sagittal.\n\nThe menu at the top right has slab MIP, layouts, the 3D view, and saving reformats as a new series.")
                     .setPositiveButton("Got it", null).show();
             Ui.prefs(this).edit().putBoolean("mpr_hint", true).apply();
         }
@@ -252,11 +286,11 @@ public class MprActivity extends BaseActivity implements DicomView.Listener, Dic
             public void pick(int i) { maximized = -1; applyLayout(i); }
         });
         c.addView(layoutSeg.view);
-        c.addView(Ui.text(this, "Four views, three planes, or only the selected view.", 13, Ui.SUB));
+        c.addView(Ui.text(this, "Four views with 3D, three planes, or only the selected view. Choose the default in Settings › MPR.", 13, Ui.SUB));
 
         c.addView(Ui.heading(this, "Slab"));
         LinearLayout modes = Ui.row(this);
-        final List<Button> modeBtns = new ArrayList<>();
+        final List<Button> modeBtns = modeBtnsF;
         for (int i = 0; i < 4; i++) {
             final int k = i;
             Button bt = Ui.btn(this, MODES[i], null);
@@ -270,7 +304,7 @@ public class MprActivity extends BaseActivity implements DicomView.Listener, Dic
         c.addView(Ui.hscroll(this, modes));
         LinearLayout thick = Ui.row(this);
         final double[] mm = {2, 5, 10, 20, 40, 80};
-        final List<Button> thickBtns = new ArrayList<>();
+        final List<Button> thickBtns = thickBtnsF;
         for (int i = 0; i < mm.length; i++) {
             final int k = i;
             Button bt = Ui.btn(this, (int) mm[i] + " mm", null);
@@ -291,7 +325,7 @@ public class MprActivity extends BaseActivity implements DicomView.Listener, Dic
 
         c.addView(Ui.heading(this, "3D view"));
         LinearLayout r3 = Ui.row(this);
-        final List<Button> r3Btns = new ArrayList<>();
+        final List<Button> r3Btns = r3BtnsF;
         for (int i = 0; i < R3.length; i++) {
             final int k = i;
             Button bt = Ui.btn(this, R3[i], null);
@@ -310,7 +344,10 @@ public class MprActivity extends BaseActivity implements DicomView.Listener, Dic
         Ui.switchRow(this, c, "crossref", "Crosshair lines", true, new CompoundButton.OnCheckedChangeListener() {
             public void onCheckedChanged(CompoundButton b, boolean on) { for (DicomView v : views) { v.crossVisible = on; v.invalidate(); } }
         });
-        Ui.switchRow(this, c, "link", "Link window across planes", true, new CompoundButton.OnCheckedChangeListener() {
+        Ui.switchRow(this, c, "link", "Link plane rotation", Ui.prefs(this).getBoolean("mpr_link_planes", true), new CompoundButton.OnCheckedChangeListener() {
+            public void onCheckedChanged(CompoundButton b, boolean on) { if (on != linkPlanes) setLinkPlanes(on); }
+        });
+        Ui.switchRow(this, c, "brightness", "Link window across planes", true, new CompoundButton.OnCheckedChangeListener() {
             public void onCheckedChanged(CompoundButton b, boolean on) { linkWindow = on; }
         });
         Ui.actionRow(this, c, "brightness", "Window presets", new View.OnClickListener() { public void onClick(View v) { drawer.close(); presets(); } });
@@ -388,6 +425,7 @@ public class MprActivity extends BaseActivity implements DicomView.Listener, Dic
         if (fourthIsCpr) t4 = (t == DicomView.T_CROSS || t == DicomView.T_CURVE) ? DicomView.T_SCROLL : t;
         else t4 = (t == DicomView.T_WL || t == DicomView.T_PAN) ? t : DicomView.T_ORBIT;
         views[3].setTool(t4);
+        if (presetScroll != null) { presetScroll.setVisibility(t == DicomView.T_WL ? View.VISIBLE : View.GONE); if (t == DicomView.T_WL) buildPresetRow(); }
         if (t == DicomView.T_CURVE) Ui.toast(this, "Tap points along the structure on any plane. The curved reformat appears in the fourth view.");
     }
 
@@ -464,6 +502,7 @@ public class MprActivity extends BaseActivity implements DicomView.Listener, Dic
                 DicomView.CrossLine l = new DicomView.CrossLine();
                 l.x = cx; l.y = cy; l.dx = (float) (dx / L); l.dy = (float) (dy / L);
                 l.color = COLORS[j];
+                l.plane = j;
                 l.slabHalf = slabMode == Volume.THIN ? 0 : (float) (slabMm / 2 / pl.s);
                 v.crossLines.add(l);
             }
@@ -510,7 +549,8 @@ public class MprActivity extends BaseActivity implements DicomView.Listener, Dic
                 if (d > Math.PI) d -= 2 * Math.PI;
                 if (d < -Math.PI) d += 2 * Math.PI;
                 lastAng = a;
-                rotateOthers(k, d);
+                if (linkPlanes || grabPlane < 0) rotateOthers(k, d);
+                else rotatePlane(k, grabPlane, d);
             }
         }
     }
@@ -524,14 +564,16 @@ public class MprActivity extends BaseActivity implements DicomView.Listener, Dic
         float dp = v.density();
         double dist = Math.hypot(sx - c[0], sy - c[1]);
         if (dist < 50 * dp) return 0;
+        double best = Double.MAX_VALUE;
+        grabPlane = -1;
         for (DicomView.CrossLine l : v.crossLines) {
             float[] a = v.toScreen(l.x, l.y), b = v.toScreen(l.x + l.dx * 10, l.y + l.dy * 10);
             double ux = b[0] - a[0], uy = b[1] - a[1], L = Math.hypot(ux, uy);
             if (L < 1e-6) continue;
             double perp = Math.abs(((sx - a[0]) * uy - (sy - a[1]) * ux) / L);
-            if (perp < 26 * dp) return 1;
+            if (perp < 26 * dp && perp < best) { best = perp; grabPlane = l.plane; }
         }
-        return 0;
+        return grabPlane >= 0 ? 1 : 0;
     }
 
     void moveCenter(int k, float ix, float iy) {
@@ -556,6 +598,38 @@ public class MprActivity extends BaseActivity implements DicomView.Listener, Dic
         updating = false;
         updateHeaders();
         updateCross();
+    }
+
+    /** Unlinked: turns only the grabbed plane around this view's axis; the other plane stays where it was. */
+    void rotatePlane(int k, int j, double ang) {
+        double[] axis = N(k);
+        U[j] = Volume.norm(Volume.rot(U[j], axis, ang));
+        V[j] = Volume.norm(Volume.rot(V[j], axis, ang));
+        views[j].clearAnnotations();
+        updating = true;
+        views[j].setIndex(provs[j].indexFor(C));
+        updating = false;
+        updateHeaders();
+        updateCross();
+    }
+
+    void setLinkPlanes(boolean on) {
+        linkPlanes = on;
+        Ui.prefs(this).edit().putBoolean("mpr_link_planes", on).apply();
+        if (linkBtn instanceof android.widget.ImageButton) {
+            ((android.widget.ImageButton) linkBtn).setImageDrawable(new Icons(on ? "link" : "unlink", Ui.TEXT));
+            Ui.setToolOn(linkBtn, on);
+        }
+        Ui.toast(this, on ? "Planes linked: tilting one line turns both other planes together." : "Planes unlinked: tilting a line turns only that plane.");
+    }
+
+    void resetOrientation() {
+        resetFrames();
+        C = vol.center.clone();
+        yaw = 0; pitch = 0;
+        for (int k = 0; k < 4; k++) { views[k].resetView(); views[k].clearAnnotations(); }
+        refreshPlanes();
+        render3D(false);
     }
 
     void updateHeaders() {
@@ -669,6 +743,40 @@ public class MprActivity extends BaseActivity implements DicomView.Listener, Dic
 
     public void onImageTap(DicomView v, float ix, float iy) { }
     public void onImageReady(DicomView v) { }
+    public void onMeasureEdited(DicomView v, DicomView.Ann a) { }
+    public void onMeasureDone(DicomView v, DicomView.Ann a) {
+        if (a.type == DicomView.T_ABC) SmartUi.askAbcSlices(this, v, a, vol.minSp);
+    }
+
+    void buildPresetRow() {
+        presetRow.removeAllViews();
+        DicomView v = views[active];
+        if (vol.ct) for (String n : Windows.forType("")) {
+            final Windows.Preset p = Windows.get(n);
+            if (p == null) continue;
+            presetRow.addView(chip(p.name, Math.abs(v.wc - p.level) < 0.5 && Math.abs(v.ww - p.width) < 0.5, new View.OnClickListener() {
+                public void onClick(View x) { applyWindow(p.level, p.width); buildPresetRow(); }
+            }));
+        }
+        presetRow.addView(chip("Default", false, new View.OnClickListener() { public void onClick(View x) { applyWindow(vol.defWc, vol.defWw); buildPresetRow(); } }));
+        if (vol.ct) presetRow.addView(chip("More…", false, new View.OnClickListener() { public void onClick(View x) { presets(); } }));
+    }
+
+    void applyWindow(double wc, double ww) {
+        if (linkWindow) { for (int k = 0; k < 3; k++) views[k].setWindow(wc, ww); }
+        else views[active].setWindow(wc, ww);
+    }
+
+    TextView chip(String label, boolean on, View.OnClickListener l) {
+        TextView t = Ui.text(this, label, 13.5f, on ? Ui.TEXT : Ui.SUB);
+        t.setPadding(Ui.dp(this, 14), Ui.dp(this, 7), Ui.dp(this, 14), Ui.dp(this, 7));
+        t.setBackground(Ui.ripple(Ui.rounded(on ? Ui.BTN_ON : Ui.CARD, Ui.dp(this, 16))));
+        t.setOnClickListener(l);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
+        lp.setMargins(Ui.dp(this, 3), 0, Ui.dp(this, 3), 0);
+        t.setLayoutParams(lp);
+        return t;
+    }
     public void onLongPressImage(DicomView v) { presets(); }
     public void onInteractionEnd(DicomView v) {
         int k = indexOf(v);
@@ -692,16 +800,14 @@ public class MprActivity extends BaseActivity implements DicomView.Listener, Dic
 
     // ---------------- actions ----------------
     void presets() {
-        String[] names = new String[ViewerActivity.PRESETS.length + 1];
-        names[0] = "Default";
-        for (int i = 0; i < ViewerActivity.PRESETS.length; i++) names[i + 1] = ViewerActivity.PRESETS[i][0] + "   W " + ViewerActivity.PRESETS[i][2] + " / L " + ViewerActivity.PRESETS[i][1];
+        String[] names = new String[Windows.ALL.length + 1];
+        names[0] = "Default (from the series)";
+        for (int k = 0; k < Windows.ALL.length; k++) names[k + 1] = Windows.ALL[k].label();
         new AlertDialog.Builder(this).setTitle("Window presets").setItems(names, new DialogInterface.OnClickListener() {
             public void onClick(DialogInterface d, int w) {
-                double wc = w == 0 ? vol.defWc : Double.parseDouble(ViewerActivity.PRESETS[w - 1][1]);
-                double ww = w == 0 ? vol.defWw : Double.parseDouble(ViewerActivity.PRESETS[w - 1][2]);
-                for (int k = 0; k < 3; k++) views[k].setWindow(wc, ww);
-                if (fourthIsCpr) views[3].setWindow(wc, ww);
-                else if (r3mode == 0) views[3].setWindow(wc, ww);
+                if (w == 0) applyWindow(vol.defWc, vol.defWw);
+                else applyWindow(Windows.ALL[w - 1].level, Windows.ALL[w - 1].width);
+                if (presetScroll.getVisibility() == View.VISIBLE) buildPresetRow();
             }
         }).show();
     }
@@ -751,7 +857,7 @@ public class MprActivity extends BaseActivity implements DicomView.Listener, Dic
         final double[] u = U[k].clone(), v = V[k].clone(), n = N(k);
         final int mode = slabMode;
         final String desc = "MPR " + headers[k].getText() + " " + fmt(spacing) + "mm" + (mode == Volume.THIN ? "" : " " + MODES[mode] + " " + fmt(thickness) + "mm");
-        pd = new ProgressDialog(this);
+        pd = new Ui.Busy(this);
         pd.setMessage("Saving " + desc + "…");
         pd.setCancelable(false);
         pd.show();
@@ -816,7 +922,7 @@ public class MprActivity extends BaseActivity implements DicomView.Listener, Dic
                         final int done = i + 1, tot = count;
                         if (i % 5 == 0) h.post(new Runnable() { public void run() { if (pd != null) pd.setMessage("Saving " + desc + "\n" + done + " of " + tot); } });
                     }
-                } catch (Throwable e) { err = e.getMessage(); }
+                } catch (Throwable e) { err = Ui.friendly(e); }
                 final int fs = saved;
                 final String fe = err;
                 Store.log(MprActivity.this, "file", "Saved " + desc, fe == null ? fs + " images added to the study" : "Failed: " + fe, fe == null);

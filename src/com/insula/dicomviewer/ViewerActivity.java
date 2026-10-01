@@ -70,6 +70,20 @@ public class ViewerActivity extends BaseActivity implements DicomView.Listener {
     /** Per-viewport offsets (mm) that line up studies whose coordinates differ; see syncFrom(). */
     final double[] align = new double[4];
     final boolean[] wlTouched = new boolean[4];
+    // Study-type quick tools
+    String studyType = StudyType.GENERAL;
+    StudyType.Profile profile = StudyType.profile(StudyType.GENERAL, "");
+    StudyType.Shortcut activeShortcut;
+    // The measurement whose result the bar shows; the bar follows it while it is edited.
+    DicomView resultView;
+    DicomView.Ann resultAnn;
+    java.util.List<DicomView.Ann> resultList;
+    String resultRef = "";
+    LinearLayout presetRow, hintBar;
+    View presetScroll;
+    TextView hintText;
+    FrameLayout rootView;
+    View smartPanel;
     final Map<String, LinearLayout> quickItems = new HashMap<>();
     LinearLayout quick;
     Switch linkSwitch;
@@ -82,7 +96,7 @@ public class ViewerActivity extends BaseActivity implements DicomView.Listener {
     Switch loopSwitch;
     final List<FrameLayout> thumbs = new ArrayList<>();
     final Handler h = new Handler(Looper.getMainLooper());
-    ProgressDialog pd;
+    Ui.Busy pd;
 
     final Runnable cine = new Runnable() {
         public void run() {
@@ -123,6 +137,15 @@ public class ViewerActivity extends BaseActivity implements DicomView.Listener {
         top.addView(Ui.icon(this, "menu", new View.OnClickListener() { public void onClick(View v) { drawer.open(); } }));
         main.addView(top);
 
+        hintBar = Ui.row(this);
+        hintBar.setBackgroundColor(0xFF2E3A4A);
+        hintBar.setPadding(Ui.dp(this, 14), Ui.dp(this, 8), Ui.dp(this, 4), Ui.dp(this, 8));
+        hintText = Ui.text(this, "", 13.5f, Ui.TEXT);
+        hintBar.addView(hintText, Ui.wrapWeight(1));
+        hintBar.addView(Ui.icon(this, "close", "Hide", new View.OnClickListener() { public void onClick(View v) { endShortcut(); } }));
+        hintBar.setVisibility(View.GONE);
+        main.addView(hintBar);
+
         grid = Ui.col(this);
         grid.setBackgroundColor(Ui.BG);
         int gp = Ui.dp(this, 5);
@@ -138,6 +161,11 @@ public class ViewerActivity extends BaseActivity implements DicomView.Listener {
         }, true, true, true);
         palette = mbar.tools;
 
+        presetRow = Ui.row(this);
+        presetRow.setPadding(Ui.dp(this, 8), Ui.dp(this, 6), Ui.dp(this, 8), Ui.dp(this, 2));
+        presetScroll = Ui.hscroll(this, presetRow);
+        presetScroll.setVisibility(View.GONE);
+        main.addView(presetScroll);
         main.addView(Ui.hscroll(this, buildQuickBar()));
 
         strip = Ui.row(this);
@@ -163,7 +191,9 @@ public class ViewerActivity extends BaseActivity implements DicomView.Listener {
         updateTitle();
         Library.ImageInfo fi = first != null ? first.first() : null;
         if (fi != null && fi.frameTime > 0) setFps((int) Math.max(1, Math.min(60, Math.round(1000 / fi.frameTime))));
+        rootView = root;
         if (!Ui.prefs(this).getBoolean("viewer_tips_v2", false)) showTips(root);
+        detectStudyType(first);
     }
 
     @Override protected void onResume() {
@@ -182,6 +212,8 @@ public class ViewerActivity extends BaseActivity implements DicomView.Listener {
 
     @Override protected boolean handleBack() {
         if (tips != null) { dismissTips(); return true; }
+        if (smartPanel != null) { hideSmart(); return true; }
+        if (hintBar != null && hintBar.getVisibility() == View.VISIBLE) { endShortcut(); return true; }
         if (drawer != null && drawer.open) { drawer.close(); return true; }
         if (railOpen) { showPalette(false); return true; }
         return false;
@@ -229,16 +261,10 @@ public class ViewerActivity extends BaseActivity implements DicomView.Listener {
         hdr.addView(Ui.icon(this, "close", new View.OnClickListener() { public void onClick(View v) { drawer.close(); } }));
         c.addView(hdr);
 
-        c.addView(Ui.heading(this, "Tools"));
-        toolSeg = new Ui.Segmented(this, new String[]{"layers", "brightness", "ruler"}, new Ui.Segmented.OnPick() {
-            public void pick(int i) {
-                if (i == 0) { primaryTool = DicomView.T_SCROLL; showPalette(false); updateQuick(); }
-                else if (i == 1) { primaryTool = DicomView.T_WL; showPalette(false); updateQuick(); }
-                else { drawer.close(); showPalette(true); }
-            }
-        });
-        c.addView(toolSeg.view);
-        c.addView(Ui.text(this, "Scroll images, adjust brightness and contrast, or measure. Pinch zooms and two fingers pan with any tool.", 13, Ui.SUB));
+        c.addView(Ui.heading(this, "This study"));
+        Ui.actionRow(this, c, "smart", "Quick tools for this study", new View.OnClickListener() { public void onClick(View v) { drawer.close(); showSmart(); } });
+        Ui.actionRow(this, c, "quality", "Study quality", new View.OnClickListener() { public void onClick(View v) { drawer.close(); SmartUi.showQuality(ViewerActivity.this, activeSeries()); } });
+        c.addView(Ui.heading(this, "Viewports"));
         linkSwitch = Ui.switchRow(this, c, "link", "Link", link, new CompoundButton.OnCheckedChangeListener() {
             public void onCheckedChanged(CompoundButton b, boolean on) { link = on; if (on) syncFrom(views[active]); updateQuick(); }
         });
@@ -465,12 +491,10 @@ public class ViewerActivity extends BaseActivity implements DicomView.Listener {
         if (on) attachRail(active); else detachRail();
         updateQuick();
         if (on) {
-            if (tool < DicomView.T_LENGTH) selectTool(DicomView.T_LENGTH);
-            toolSeg.select(2);
+            if (!DicomView.isAnnTool(tool)) selectTool(DicomView.T_LENGTH);
             updateKey();
         } else {
             selectTool(primaryTool);
-            toolSeg.select(primaryTool == DicomView.T_WL ? 1 : 0);
         }
     }
 
@@ -486,7 +510,17 @@ public class ViewerActivity extends BaseActivity implements DicomView.Listener {
         Ui.toast(this, was ? "Key image mark removed." : "Marked as key image. Export key images as PDF from Share.");
     }
 
-    public void onSelection(DicomView v, DicomView.Ann a) { if (mbar != null) mbar.onSelection(v, a); }
+    public void onSelection(DicomView v, DicomView.Ann a) { if (mbar != null) mbar.onSelection(v, a); updateResultHint(); }
+
+    public void onMeasureEdited(DicomView v, DicomView.Ann a) { if (a != null && a == resultAnn) updateResultHint(); }
+
+    /** Shows the shortcut's current result; hides the bar if that measurement was deleted. */
+    void updateResultHint() {
+        if (resultAnn == null || hintText == null) return;
+        if (resultList == null || !resultList.contains(resultAnn)) { resultAnn = null; hintBar.setVisibility(View.GONE); return; }
+        hintText.setText(resultView.describe(resultAnn) + "\n" + resultRef + " For guidance only; reference values vary.");
+        hintBar.setVisibility(View.VISIBLE);
+    }
 
     void setFps(int f) {
         fps = Math.max(1, Math.min(60, f));
@@ -510,7 +544,214 @@ public class ViewerActivity extends BaseActivity implements DicomView.Listener {
     public void onWindowChanged(DicomView v) { markWl(v); }
     public void onImageReady(DicomView v) { updateRefs(); }
     public void onLongPressImage(DicomView v) { presets(); }
-    public void onInteractionEnd(DicomView v) { }
+    public void onInteractionEnd(DicomView v) { if (tool == DicomView.T_WL) updateQuick(); }
+
+    public void onMeasureDone(DicomView v, DicomView.Ann a) {
+        if (activeShortcut != null) {
+            resultView = v;
+            resultAnn = a;
+            resultList = v.annotations();
+            resultRef = activeShortcut.reference;
+            for (DicomView o : views) o.nextText = "";
+            activeShortcut = null;
+            updateResultHint();
+        }
+        if (a.type == DicomView.T_ABC) SmartUi.askAbcSlices(this, v, a, sliceSpacing(v), new Runnable() { public void run() { updateResultHint(); } });
+    }
+
+    /** Distance between neighbouring slices in mm (from positions, else slice thickness, else 1). */
+    double sliceSpacing(DicomView v) {
+        if (v.prov != null && v.count() > 1) {
+            double[] a = v.prov.position(Math.max(0, v.index - 1)), b = v.prov.position(Math.min(v.count() - 1, Math.max(1, v.index)));
+            if (a != null && b != null) { double d = Math.sqrt(Math.pow(a[0] - b[0], 2) + Math.pow(a[1] - b[1], 2) + Math.pow(a[2] - b[2], 2)); if (d > 0.01) return d; }
+        }
+        Library.Series se = seriesOf(v);
+        if (se != null && !se.slices().isEmpty() && se.slices().get(0).geo().thick > 0) return se.slices().get(0).geo().thick;
+        return 1;
+    }
+
+    // ---------------- study-type quick tools ----------------
+    void detectStudyType(final Library.Series se) {
+        if (se == null) return;
+        new Thread() {
+            public void run() {
+                String body = "", proto = "", contrast = "";
+                try {
+                    Dicom.DataSet ds = Dicom.parse(Library.readFile(se.first().file));
+                    body = ds.str(0x00180015); proto = ds.str(0x00181030); contrast = ds.str(0x00180010);
+                } catch (Exception ignored) { }
+                final String type = StudyType.detect(se.modality, study.desc, se.desc, body, proto, contrast);
+                h.post(new Runnable() {
+                    public void run() {
+                        if (isFinishing()) return;
+                        studyType = type;
+                        profile = StudyType.profile(type, se.modality);
+                        LinearLayout sm = quickItems.get("smart");
+                        if (sm != null) ((TextView) sm.getChildAt(1)).setText(StudyType.GENERAL.equals(type) ? "Smart" : shortName(type));
+                        updateQuick();
+                        String key = "recognized_" + study.uid;
+                        if (!StudyType.GENERAL.equals(type) && !Ui.prefs(ViewerActivity.this).getBoolean(key, false)) {
+                            Ui.prefs(ViewerActivity.this).edit().putBoolean(key, true).apply();
+                            Ui.toast(ViewerActivity.this, "Recognized: " + profile.title + ". Tap Smart in the toolbar for tools suited to it.");
+                        }
+                    }
+                });
+            }
+        }.start();
+    }
+
+    static String shortName(String type) {
+        switch (type) {
+            case StudyType.CARDIAC_CTA: return "Cardiac";
+            case StudyType.CTPA: return "CTPA";
+            case StudyType.CTA: return "CTA";
+            case StudyType.TRAUMA: return "Trauma";
+            case StudyType.CVJ: return "CVJ";
+            case StudyType.C_SPINE: return "C-spine";
+            case StudyType.SPINE: return "Spine";
+            case StudyType.BRAIN: return "Brain";
+            case StudyType.NECK: return "Neck";
+            case StudyType.CHEST: return "Chest";
+            case StudyType.ABDOMEN: return "Abdomen";
+            default: return "Smart";
+        }
+    }
+
+    void buildPresetRow() {
+        presetRow.removeAllViews();
+        DicomView v = views[active];
+        Library.Series se = seriesOf(v);
+        boolean ct = se != null && "CT".equals(se.modality);
+        if (ct) for (String n : Windows.forType(studyType)) {
+            final Windows.Preset p = Windows.get(n);
+            if (p == null) continue;
+            boolean on = Math.abs(v.wc - p.level) < 0.5 && Math.abs(v.ww - p.width) < 0.5;
+            presetRow.addView(chip(p.name, on, new View.OnClickListener() {
+                public void onClick(View x) { DicomView d = views[active]; d.setWindow(p.level, p.width); markWl(d); buildPresetRow(); }
+            }));
+        }
+        presetRow.addView(chip("Default", false, new View.OnClickListener() { public void onClick(View x) { views[active].defaultWindow(); markWl(views[active]); buildPresetRow(); } }));
+        presetRow.addView(chip("Full range", false, new View.OnClickListener() { public void onClick(View x) { views[active].autoWindow(); markWl(views[active]); buildPresetRow(); } }));
+        if (ct) presetRow.addView(chip("More…", false, new View.OnClickListener() { public void onClick(View x) { presets(); } }));
+    }
+
+    TextView chip(String label, boolean on, View.OnClickListener l) {
+        TextView t = Ui.text(this, label, 13.5f, on ? Ui.TEXT : Ui.SUB);
+        t.setPadding(Ui.dp(this, 14), Ui.dp(this, 7), Ui.dp(this, 14), Ui.dp(this, 7));
+        t.setBackground(Ui.ripple(Ui.rounded(on ? Ui.BTN_ON : Ui.CARD, Ui.dp(this, 16))));
+        t.setOnClickListener(l);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
+        lp.setMargins(Ui.dp(this, 3), 0, Ui.dp(this, 3), 0);
+        t.setLayoutParams(lp);
+        return t;
+    }
+
+    void showSmart() {
+        if (smartPanel != null) { hideSmart(); return; }
+        FrameLayout dim = new FrameLayout(this);
+        dim.setBackgroundColor(0x99000000);
+        dim.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { hideSmart(); } });
+        LinearLayout card = Ui.col(this);
+        card.setBackground(Ui.rounded(Ui.CARD, Ui.dp(this, 20)));
+        card.setClickable(true);
+        int p = Ui.dp(this, 18);
+        card.setPadding(p, p, Ui.dp(this, 8), p);
+        LinearLayout head = Ui.row(this);
+        LinearLayout hc = Ui.col(this);
+        TextView t = Ui.text(this, profile.title, 17, Ui.TEXT);
+        t.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        hc.addView(t);
+        hc.addView(Ui.text(this, StudyType.GENERAL.equals(studyType) ? "Study type not recognized: general tools" : "Tools suited to this study", 13, Ui.SUB));
+        head.addView(hc, Ui.wrapWeight(1));
+        head.addView(Ui.icon(this, "close", "Close", new View.OnClickListener() { public void onClick(View v) { hideSmart(); } }));
+        card.addView(head);
+        for (StudyType.Group g : profile.groups) {
+            TextView gt = Ui.text(this, g.title.toUpperCase(java.util.Locale.getDefault()), 12, Ui.SUB);
+            gt.setPadding(0, Ui.dp(this, 14), 0, Ui.dp(this, 6));
+            card.addView(gt);
+            Ui.Flow r = new Ui.Flow(this);
+            for (final StudyType.Tool tl : g.tools)
+                r.addView(Ui.actionChip(this, tl.label, tl.icon, new View.OnClickListener() { public void onClick(View v) { hideSmart(); runTool(tl); } }));
+            LinearLayout.LayoutParams fl = new LinearLayout.LayoutParams(-1, -2);
+            fl.rightMargin = Ui.dp(this, 10);
+            card.addView(r, fl);
+        }
+        TextView q = Ui.text(this, "Study quality ›", 14, Ui.VALUE);
+        q.setPadding(0, Ui.dp(this, 16), 0, 0);
+        q.setOnClickListener(new View.OnClickListener() { public void onClick(View v) { hideSmart(); SmartUi.showQuality(ViewerActivity.this, activeSeries()); } });
+        card.addView(q);
+        ScrollView sv = new ScrollView(this);
+        sv.addView(card);
+        FrameLayout.LayoutParams cl = new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM);
+        cl.setMargins(Ui.dp(this, 8), 0, Ui.dp(this, 8), Ui.dp(this, 8));
+        dim.addView(sv, cl);
+        rootView.addView(dim, new FrameLayout.LayoutParams(-1, -1));
+        smartPanel = dim;
+    }
+
+    void hideSmart() {
+        if (smartPanel != null && smartPanel.getParent() != null) ((ViewGroup) smartPanel.getParent()).removeView(smartPanel);
+        smartPanel = null;
+    }
+
+    void runTool(StudyType.Tool t) {
+        Library.Series se = activeSeries();
+        switch (t.kind) {
+            case "win": {
+                Windows.Preset p = Windows.get(t.arg);
+                if (p == null) return;
+                DicomView v = views[active];
+                v.setWindow(p.level, p.width);
+                markWl(v);
+                primaryTool = DicomView.T_WL;
+                showPalette(false);
+                break;
+            }
+            case "mpr": case "slab": {
+                if (se == null) return;
+                Intent i = new Intent(this, MprActivity.class).putExtra("series", se.uid);
+                if (t.kind.equals("mpr")) i.putExtra(MprActivity.EXTRA_PLANE, t.arg.equals("coronal") ? 1 : t.arg.equals("sagittal") ? 2 : 0);
+                else {
+                    String[] a = t.arg.split(":");
+                    i.putExtra(MprActivity.EXTRA_SLAB_MODE, a[0].equals("minip") ? Volume.MINIP : Volume.MIP);
+                    i.putExtra(MprActivity.EXTRA_SLAB_MM, Double.parseDouble(a[1]));
+                }
+                startActivity(i);
+                break;
+            }
+            case "tool": {
+                int id = t.arg.equals("angle") ? DicomView.T_ANGLE : t.arg.equals("ellipse") ? DicomView.T_ELLIPSE : t.arg.equals("cobb") ? DicomView.T_COBB : DicomView.T_LENGTH;
+                showPalette(true);
+                selectTool(id);
+                break;
+            }
+            case "short": startShortcut(StudyType.shortcut(t.arg)); break;
+            case "3d": {
+                if (se == null) return;
+                if (se.slices().size() < 10) { Ui.toast(this, "3D needs a stack of at least 10 slices. Choose a series with more images."); return; }
+                startActivity(new Intent(this, VrtActivity.class).putExtra(VrtActivity.EXTRA_SERIES, se.uid).putExtra(VrtActivity.EXTRA_PRESET, t.arg));
+                break;
+            }
+        }
+    }
+
+    void startShortcut(StudyType.Shortcut s) {
+        if (s == null) return;
+        activeShortcut = s;
+        for (DicomView v : views) v.nextText = s.tool == DicomView.T_ABC ? "" : s.label;
+        showPalette(true);
+        selectTool(s.tool);
+        hintText.setText(s.label + ": " + s.how);
+        hintBar.setVisibility(View.VISIBLE);
+    }
+
+    void endShortcut() {
+        activeShortcut = null;
+        resultAnn = null;
+        resultList = null;
+        for (DicomView v : views) v.nextText = "";
+        hintBar.setVisibility(View.GONE);
+    }
     public void onImageTap(DicomView v, float x, float y) { }
 
     public void onArrowCreated(final DicomView v, final DicomView.Ann a) {
@@ -658,6 +899,7 @@ public class ViewerActivity extends BaseActivity implements DicomView.Listener {
     View buildQuickBar() {
         quick = Ui.row(this);
         quick.setPadding(Ui.dp(this, 4), Ui.dp(this, 4), Ui.dp(this, 4), Ui.dp(this, 2));
+        qItem("smart", "smart", "Smart", new View.OnClickListener() { public void onClick(View v) { showSmart(); } });
         qItem("scroll", "layers", "Scroll", new View.OnClickListener() { public void onClick(View v) { primaryTool = DicomView.T_SCROLL; showPalette(false); } });
         qItem("window", "brightness", "Window", new View.OnClickListener() { public void onClick(View v) { primaryTool = DicomView.T_WL; showPalette(false); } });
         qItem("measure", "ruler", "Measure", new View.OnClickListener() { public void onClick(View v) { showPalette(!railOpen); } });
@@ -713,6 +955,12 @@ public class ViewerActivity extends BaseActivity implements DicomView.Listener {
         quickItems.get("link").setVisibility(multi ? View.VISIBLE : View.GONE);
         quickItems.get("align").setVisibility(multi ? View.VISIBLE : View.GONE);
         setQuickOn("link", link);
+        // Window presets appear while the brightness tool is in use.
+        if (presetScroll != null) {
+            boolean wl = !railOpen && tool == DicomView.T_WL;
+            presetScroll.setVisibility(wl ? View.VISIBLE : View.GONE);
+            if (wl) buildPresetRow();
+        }
     }
 
     void pickLayout() {
@@ -865,17 +1113,18 @@ public class ViewerActivity extends BaseActivity implements DicomView.Listener {
     }
 
     void presets() {
-        String[] names = new String[PRESETS.length + 2];
-        names[0] = "Default (from file)";
+        String[] names = new String[Windows.ALL.length + 2];
+        names[0] = "Default (from the file)";
         names[1] = "Full range";
-        for (int i = 0; i < PRESETS.length; i++) names[i + 2] = PRESETS[i][0] + "   W " + PRESETS[i][2] + " / L " + PRESETS[i][1];
+        for (int k = 0; k < Windows.ALL.length; k++) names[k + 2] = Windows.ALL[k].label();
         new AlertDialog.Builder(this).setTitle("Window presets").setItems(names, new DialogInterface.OnClickListener() {
             public void onClick(DialogInterface d, int w) {
                 DicomView v = views[active];
                 if (w == 0) v.defaultWindow();
                 else if (w == 1) v.autoWindow();
-                else v.setWindow(Double.parseDouble(PRESETS[w - 2][1]), Double.parseDouble(PRESETS[w - 2][2]));
+                else v.setWindow(Windows.ALL[w - 2].level, Windows.ALL[w - 2].width);
                 markWl(v);
+                updateQuick();
             }
         }).show();
     }
@@ -992,7 +1241,7 @@ public class ViewerActivity extends BaseActivity implements DicomView.Listener {
                 .setMessage("Identifying fields and private tags are blanked. Text burned into the pixels is not removed.")
                 .setPositiveButton("Export", new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface d, int w) {
-                        pd = new ProgressDialog(ViewerActivity.this);
+                        pd = new Ui.Busy(ViewerActivity.this);
                         pd.setMessage("Anonymizing…");
                         pd.setCancelable(false);
                         pd.show();

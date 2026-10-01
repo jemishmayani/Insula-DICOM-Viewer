@@ -53,7 +53,7 @@ public class PacsActivity extends BaseActivity {
     final List<Result> results = new ArrayList<>();
     BaseAdapter adapter;
     final Handler h = new Handler(Looper.getMainLooper());
-    ProgressDialog pd;
+    Ui.Busy pd;
     volatile boolean cancel;
 
     @Override protected void onCreate(Bundle b) {
@@ -534,7 +534,7 @@ public class PacsActivity extends BaseActivity {
     void download(final Result r) {
         final Downloader dl = new Downloader(r.p, r.uid);
         current = dl;
-        pd = new ProgressDialog(this);
+        pd = new Ui.Busy(this);
         pd.setMessage("Listing series…");
         pd.setCancelable(false);
         pd.setButton(DialogInterface.BUTTON_NEGATIVE, "Cancel", new DialogInterface.OnClickListener() { public void onClick(DialogInterface d, int w) { dl.cancel = true; } });

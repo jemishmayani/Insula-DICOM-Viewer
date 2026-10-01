@@ -119,20 +119,25 @@ final class Seg {
         if (prog != null) prog.update("Finding the body outline", 5);
         // 1. Air outside the body: flood from the volume's faces through voxels below the air threshold.
         IntQueue q = new IntQueue(1 << 16);
+        // CT: only true air (below -950 HU) or scanner padding counts as outside. Lung tissue (about -850 HU) stops the
+        // flood, so lungs survive where a small field of view cuts through them.
+        final double outside = p.ct ? -950 : p.air;
+        for (int x = 0; x < n; x++) if (p.ct && H[x] <= -1100) L[x] = OUT;
+        for (int x = 0; x < n; x++) if (L[x] == OUT) q.add(x);
         for (int k = 0; k < nz; k++) for (int j = 0; j < ny; j++) for (int i = 0; i < nx; i++) {
             // Side faces only: lungs and airways often reach the top or bottom of a chest scan.
             if (i != 0 && j != 0 && i != nx - 1 && j != ny - 1) continue;
             int x = (k * ny + j) * nx + i;
-            if (H[x] < p.air && L[x] == 0) { L[x] = OUT; q.add(x); }
+            if (H[x] < outside && L[x] == 0) { L[x] = OUT; q.add(x); }
         }
         while (!q.isEmpty()) {
             int x = q.poll(), i = x % nx, j = (x / nx) % ny, k = x / sxy;
-            if (i > 0) visitOut(L, H, x - 1, p.air, q);
-            if (i < nx - 1) visitOut(L, H, x + 1, p.air, q);
-            if (j > 0) visitOut(L, H, x - nx, p.air, q);
-            if (j < ny - 1) visitOut(L, H, x + nx, p.air, q);
-            if (k > 0) visitOut(L, H, x - sxy, p.air, q);
-            if (k < nz - 1) visitOut(L, H, x + sxy, p.air, q);
+            if (i > 0) visitOut(L, H, x - 1, outside, q);
+            if (i < nx - 1) visitOut(L, H, x + 1, outside, q);
+            if (j > 0) visitOut(L, H, x - nx, outside, q);
+            if (j < ny - 1) visitOut(L, H, x + nx, outside, q);
+            if (k > 0) visitOut(L, H, x - sxy, outside, q);
+            if (k < nz - 1) visitOut(L, H, x + sxy, outside, q);
         }
         if (prog != null) prog.update("Separating lungs, fat, and soft tissue", 25);
         // 2. Simple classes inside the body
@@ -204,8 +209,8 @@ final class Seg {
                 if (L[off + x] != DENSE || ring[x] == 2) continue;
                 // Enclosed marrow, or a thickened-cortex voxel with no contact to the outside region.
                 int i = x % nx, j = x / nx;
-                boolean outside = ring[x] == 1 && ((i > 0 && ring[x - 1] == 2) || (i < nx - 1 && ring[x + 1] == 2) || (j > 0 && ring[x - nx] == 2) || (j < ny - 1 && ring[x + nx] == 2));
-                if (!outside) L[off + x] = BONE;
+                boolean touchesOut = ring[x] == 1 && ((i > 0 && ring[x - 1] == 2) || (i < nx - 1 && ring[x + 1] == 2) || (j > 0 && ring[x - nx] == 2) || (j < ny - 1 && ring[x + nx] == 2));
+                if (!touchesOut) L[off + x] = BONE;
             }
         }
         if (prog != null) prog.update("Finding vessels", 80);
@@ -254,6 +259,7 @@ final class Seg {
         }
         for (int x = 0; x < n; x++) if (L[x] == 0x70) L[x] = VESSEL;
         for (int x = 0; x < n; x++) if (L[x] == OUT) L[x] = BG;
+        if (p.ct) removeExternal(v, prog);
         if (prog != null) prog.update("Done", 100);
     }
 
@@ -262,6 +268,234 @@ final class Seg {
     static void visitOut(byte[] L, short[] H, int y, double air, IntQueue q) {
         if (L[y] == 0 && H[y] < air) { L[y] = OUT; q.add(y); }
     }
+
+    // ---------------- external objects and heart isolation ----------------
+    /**
+     * Removes objects outside the body: the CT table (a thin, wide plate running the scan's length behind the patient)
+     * and small disconnected items such as ECG leads. Large separate parts, such as arms, are kept.
+     */
+    static void removeExternal(Vol3D v, Progress prog) {
+        if (prog != null) prog.update("Removing the table", 92);
+        byte[] L = v.labels;
+        short[] H = v.hu;
+        int nx = v.nx, ny = v.ny, nz = v.nz, n = v.n(), sxy = nx * ny;
+        // Components of solid material (above -500 HU). Mattress foam (about -900 HU) separates the table from the body.
+        java.util.BitSet seen = new java.util.BitSet(n);
+        List<long[]> comps = new ArrayList<>();   // seed, size, xmin, xmax, ymin, ymax, zmin, zmax, ysum
+        IntQueue q = new IntQueue(1 << 14);
+        for (int s0 = 0; s0 < n; s0++) {
+            if (L[s0] == BG || H[s0] <= -500 || seen.get(s0)) continue;
+            long[] b = {s0, 0, nx, -1, ny, -1, nz, -1, 0};
+            seen.set(s0); q.add(s0);
+            while (!q.isEmpty()) {
+                int x = q.poll(), i = x % nx, j = (x / nx) % ny, k = x / sxy;
+                b[1]++; b[8] += j;
+                b[2] = Math.min(b[2], i); b[3] = Math.max(b[3], i); b[4] = Math.min(b[4], j); b[5] = Math.max(b[5], j); b[6] = Math.min(b[6], k); b[7] = Math.max(b[7], k);
+                int[] nb = {i > 0 ? x - 1 : -1, i < nx - 1 ? x + 1 : -1, j > 0 ? x - nx : -1, j < ny - 1 ? x + nx : -1, k > 0 ? x - sxy : -1, k < nz - 1 ? x + sxy : -1};
+                for (int y : nb) if (y >= 0 && L[y] != BG && H[y] > -500 && !seen.get(y)) { seen.set(y); q.add(y); }
+            }
+            comps.add(b);
+        }
+        if (comps.isEmpty()) return;
+        long[] body = comps.get(0);
+        for (long[] c : comps) if (c[1] > body[1]) body = c;
+        double bodyY = body[8] / (double) body[1], vox = v.sx * v.sy * v.sz;
+        // Clear the table (thin, wide, running the scan's length, behind the body) and small separate objects.
+        for (long[] b : comps) {
+            if (b == body) continue;
+            double w = (b[3] - b[2] + 1) * v.sx, d = (b[5] - b[4] + 1) * v.sy, len = (b[7] - b[6] + 1) * v.sz;
+            double cy = b[8] / (double) b[1];
+            boolean table = d < 45 && w > 100 && len > 0.5 * nz * v.sz && cy > bodyY;
+            boolean small = b[1] * vox < 2000;
+            if (!table && !small) continue;
+            int s0 = (int) b[0];
+            L[s0] = BG; q.add(s0);
+            while (!q.isEmpty()) {
+                int x = q.poll(), i = x % nx, j = (x / nx) % ny, k = x / sxy;
+                int[] nb = {i > 0 ? x - 1 : -1, i < nx - 1 ? x + 1 : -1, j > 0 ? x - nx : -1, j < ny - 1 ? x + nx : -1, k > 0 ? x - sxy : -1, k < nz - 1 ? x + sxy : -1};
+                for (int y : nb) if (y >= 0 && L[y] != BG && H[y] > -500) { L[y] = BG; q.add(y); }
+            }
+        }
+        // Mark the body, then clear low-density voxels (mattress, air pockets) outside its outline in each slice.
+        java.util.BitSet inBody = new java.util.BitSet(n);
+        int s0 = (int) body[0];
+        inBody.set(s0); q.add(s0);
+        while (!q.isEmpty()) {
+            int x = q.poll(), i = x % nx, j = (x / nx) % ny, k = x / sxy;
+            int[] nb = {i > 0 ? x - 1 : -1, i < nx - 1 ? x + 1 : -1, j > 0 ? x - nx : -1, j < ny - 1 ? x + nx : -1, k > 0 ? x - sxy : -1, k < nz - 1 ? x + sxy : -1};
+            for (int y : nb) if (y >= 0 && L[y] != BG && H[y] > -500 && !inBody.get(y)) { inBody.set(y); q.add(y); }
+        }
+        // Low-density regions (lungs, airways, mattress) are judged as a whole: kept if mostly inside the body's
+        // outline (lungs, even where a small field of view cuts them), cleared if mostly outside it (mattress).
+        byte[] inHull = new byte[n], hull = new byte[sxy];
+        for (int k = 0; k < nz; k++) if (hullOf(inBody, k * sxy, nx, ny, hull)) System.arraycopy(hull, 0, inHull, k * sxy, sxy);
+        java.util.BitSet seenLow = new java.util.BitSet(n);
+        for (int t0 = 0; t0 < n; t0++) {
+            if (L[t0] == BG || H[t0] > -500 || seenLow.get(t0)) continue;
+            long total = 0, inside = 0;
+            seenLow.set(t0); q.add(t0);
+            while (!q.isEmpty()) {
+                int x = q.poll(), i = x % nx, j = (x / nx) % ny, k = x / sxy;
+                total++; if (inHull[x] != 0) inside++;
+                int[] nb = {i > 0 ? x - 1 : -1, i < nx - 1 ? x + 1 : -1, j > 0 ? x - nx : -1, j < ny - 1 ? x + nx : -1, k > 0 ? x - sxy : -1, k < nz - 1 ? x + sxy : -1};
+                for (int y : nb) if (y >= 0 && L[y] != BG && H[y] <= -500 && !seenLow.get(y)) { seenLow.set(y); q.add(y); }
+            }
+            if (inside * 2 >= total) continue;
+            L[t0] = BG; q.add(t0);
+            while (!q.isEmpty()) {
+                int x = q.poll(), i = x % nx, j = (x / nx) % ny, k = x / sxy;
+                int[] nb = {i > 0 ? x - 1 : -1, i < nx - 1 ? x + 1 : -1, j > 0 ? x - nx : -1, j < ny - 1 ? x + nx : -1, k > 0 ? x - sxy : -1, k < nz - 1 ? x + sxy : -1};
+                for (int y : nb) if (y >= 0 && L[y] != BG && H[y] <= -500) { L[y] = BG; q.add(y); }
+            }
+        }
+    }
+
+    /** Convex hull (filled into 'hull') of the set bits in one slice. False if the slice has too few. */
+    static boolean hullOf(java.util.BitSet set, int off, int nx, int ny, byte[] hull) {
+        java.util.Arrays.fill(hull, (byte) 0);
+        List<int[]> pts = new ArrayList<>();
+        int count = 0;
+        for (int j = 0; j < ny; j++) {
+            int lo = -1, hi = -1;
+            for (int i = 0; i < nx; i++) if (set.get(off + j * nx + i)) { count++; if (lo < 0) lo = i; hi = i; }
+            if (lo >= 0) { pts.add(new int[]{lo, j}); if (hi != lo) pts.add(new int[]{hi, j}); }
+        }
+        if (count < 50 || pts.size() < 3) return false;
+        fillHull(pts, nx, ny, hull);
+        return true;
+    }
+
+    /** Fills the convex hull of the points: each row of a convex polygon is one span, so rows are filled directly. */
+    static void fillHull(List<int[]> pts, int nx, int ny, byte[] hull) {
+        java.util.Collections.sort(pts, new java.util.Comparator<int[]>() { public int compare(int[] a, int[] b) { return a[0] != b[0] ? a[0] - b[0] : a[1] - b[1]; } });
+        int m = pts.size();
+        int[][] h = new int[2 * m][];
+        int t = 0;
+        for (int i = 0; i < m; i++) { while (t >= 2 && cross(h[t - 2], h[t - 1], pts.get(i)) <= 0) t--; h[t++] = pts.get(i); }
+        for (int i = m - 2, lower = t + 1; i >= 0; i--) { while (t >= lower && cross(h[t - 2], h[t - 1], pts.get(i)) <= 0) t--; h[t++] = pts.get(i); }
+        int nv = t - 1;
+        if (nv < 1) return;
+        int ymin = Integer.MAX_VALUE, ymax = Integer.MIN_VALUE;
+        for (int e = 0; e < nv; e++) { ymin = Math.min(ymin, h[e][1]); ymax = Math.max(ymax, h[e][1]); }
+        for (int y = Math.max(0, ymin); y <= Math.min(ny - 1, ymax); y++) {
+            double lo = Double.MAX_VALUE, hi = -Double.MAX_VALUE;
+            for (int e = 0; e < nv; e++) {
+                int[] a = h[e], b = h[(e + 1) % nv];
+                if (a[1] == b[1]) { if (a[1] == y) { lo = Math.min(lo, Math.min(a[0], b[0])); hi = Math.max(hi, Math.max(a[0], b[0])); } continue; }
+                if (y < Math.min(a[1], b[1]) || y > Math.max(a[1], b[1])) continue;
+                double x = a[0] + (b[0] - a[0]) * (y - a[1]) / (double) (b[1] - a[1]);
+                lo = Math.min(lo, x); hi = Math.max(hi, x);
+            }
+            if (lo > hi) continue;
+            int x0 = Math.max(0, (int) Math.ceil(lo - 0.01)), x1 = Math.min(nx - 1, (int) Math.floor(hi + 0.01));
+            for (int x = x0; x <= x1; x++) hull[y * nx + x] = 1;
+        }
+    }
+
+    /**
+     * Heart isolation for cardiac CT angiography: keeps the contrast-filled heart and great vessels (the largest
+     * blood-pool component) and the tissue within 25 mm of it between the lungs (myocardium, coronary arteries,
+     * epicardial fat), and returns everything else to hide: chest wall, spine, ribs, lungs, and pulmonary vessels
+     * inside the lungs. Returned as a list so the caller can apply it as one undoable edit.
+     */
+    static IntList isolateHeart(Vol3D v, Progress prog) {
+        byte[] L = v.labels;
+        int nx = v.nx, ny = v.ny, nz = v.nz, n = v.n(), sxy = nx * ny;
+        if (prog != null) prog.update("Finding pulmonary vessels", 10);
+        // 1. Vessels surrounded by lung in their slice are pulmonary vessels
+        java.util.BitSet pulm = new java.util.BitSet(n);
+        int r = Math.max(2, (int) Math.round(5 / v.sx));
+        int[][] dirs = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}};
+        for (int k = 0; k < nz; k++) for (int j = 0; j < ny; j++) for (int i = 0; i < nx; i++) {
+            int x = (k * ny + j) * nx + i;
+            int c = L[x] & 0x7F;
+            if ((L[x] & REMOVED) != 0 || (c != VESSEL && c != CALCIUM)) continue;
+            int lung = 0;
+            for (int[] d : dirs) {
+                int ii = i + d[0] * r, jj = j + d[1] * r;
+                if (ii < 0 || jj < 0 || ii >= nx || jj >= ny) continue;
+                if ((L[(k * ny + jj) * nx + ii] & 0x7F) == LUNG) lung++;
+            }
+            if (lung >= 5) pulm.set(x);
+        }
+        if (prog != null) prog.update("Finding the heart", 30);
+        // 2. Largest blood-pool component, not counting pulmonary vessels
+        java.util.BitSet seen = new java.util.BitSet(n), pool = new java.util.BitSet(n);
+        IntQueue q = new IntQueue(1 << 14);
+        IntList cur = new IntList(1 << 12), best = new IntList(4);
+        for (int s0 = 0; s0 < n; s0++) {
+            if (seen.get(s0) || !isPool(L, s0) || pulm.get(s0)) continue;
+            cur = new IntList(1 << 12);
+            seen.set(s0); q.add(s0);
+            while (!q.isEmpty()) {
+                int x = q.poll(), i = x % nx, j = (x / nx) % ny, k = x / sxy;
+                cur.add(x);
+                int[] nb = {i > 0 ? x - 1 : -1, i < nx - 1 ? x + 1 : -1, j > 0 ? x - nx : -1, j < ny - 1 ? x + nx : -1, k > 0 ? x - sxy : -1, k < nz - 1 ? x + sxy : -1};
+                for (int y : nb) if (y >= 0 && !seen.get(y) && isPool(L, y) && !pulm.get(y)) { seen.set(y); q.add(y); }
+            }
+            if (cur.size > best.size) best = cur;
+        }
+        IntList remove = new IntList(1 << 14);
+        if (best.size == 0) return remove;
+        for (int c = 0; c < best.size; c++) pool.set(best.a[c]);
+        if (prog != null) prog.update("Measuring distance from the heart", 55);
+        // 3. Distance (in steps) from the blood pool through tissue that isn't lung or bone
+        double step = Math.min(v.sx, Math.min(v.sy, v.sz));
+        int maxSteps = (int) Math.min(250, Math.round(25 / step));
+        byte[] dist = new byte[n];
+        java.util.Arrays.fill(dist, (byte) 255);
+        for (int c = 0; c < best.size; c++) { dist[best.a[c]] = 0; q.add(best.a[c]); }
+        while (!q.isEmpty()) {
+            int x = q.poll(), dx = dist[x] & 255;
+            if (dx >= maxSteps) continue;
+            int i = x % nx, j = (x / nx) % ny, k = x / sxy;
+            int[] nb = {i > 0 ? x - 1 : -1, i < nx - 1 ? x + 1 : -1, j > 0 ? x - nx : -1, j < ny - 1 ? x + nx : -1, k > 0 ? x - sxy : -1, k < nz - 1 ? x + sxy : -1};
+            for (int y : nb) {
+                if (y < 0 || (dist[y] & 255) <= dx + 1) continue;
+                int c = L[y] & 0x7F;
+                if (c == BG || c == LUNG || c == BONE || pulm.get(y)) continue;
+                dist[y] = (byte) (dx + 1);
+                q.add(y);
+            }
+        }
+        if (prog != null) prog.update("Separating the chest wall", 75);
+        // 4. Region between the lungs: convex hull of lung tissue in each slice
+        byte[] hull = new byte[sxy];
+        int nearSteps = (int) Math.round(15 / step);
+        for (int k = 0; k < nz; k++) {
+            boolean hasHull = sliceHull(L, nx, ny, k, hull);
+            for (int x2 = 0; x2 < sxy; x2++) {
+                int x = k * sxy + x2;
+                int c = L[x] & 0x7F;
+                if (c == BG || (L[x] & REMOVED) != 0) continue;
+                if (pool.get(x)) continue;
+                int d = dist[x] & 255;
+                boolean keep = d <= maxSteps && (hasHull ? hull[x2] != 0 : d <= nearSteps) && c != LUNG && c != BONE && !pulm.get(x);
+                if (!keep) remove.add(x);
+            }
+        }
+        if (prog != null) prog.update("Done", 100);
+        return remove;
+    }
+
+    static boolean isPool(byte[] L, int x) { int c = L[x] & 0x7F; return (L[x] & REMOVED) == 0 && (c == VESSEL || c == CALCIUM); }
+
+    /** Fills 'hull' with the convex hull of lung voxels in slice k. False if the slice has too little lung. */
+    static boolean sliceHull(byte[] L, int nx, int ny, int k, byte[] hull) {
+        java.util.Arrays.fill(hull, (byte) 0);
+        List<int[]> pts = new ArrayList<>();
+        int off = k * nx * ny, count = 0;
+        for (int j = 0; j < ny; j++) {
+            int lo = -1, hi = -1;
+            for (int i = 0; i < nx; i++) if ((L[off + j * nx + i] & 0x7F) == LUNG) { count++; if (lo < 0) lo = i; hi = i; }
+            if (lo >= 0) { pts.add(new int[]{lo, j}); if (hi != lo) pts.add(new int[]{hi, j}); }
+        }
+        if (count < 200 || pts.size() < 3) return false;
+        fillHull(pts, nx, ny, hull);
+        return true;
+    }
+
+    static long cross(int[] o, int[] a, int[] b) { return (long) (a[0] - o[0]) * (b[1] - o[1]) - (long) (a[1] - o[1]) * (b[0] - o[0]); }
 
     // ---------------- manual editing ----------------
     /** One undoable change: the voxels touched and their previous labels. */

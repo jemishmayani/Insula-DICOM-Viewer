@@ -52,7 +52,9 @@ import java.util.concurrent.Executors;
  * (OpenGL ES 3.0) when available, otherwise on the CPU in a limited mode. Sessions are saved into the study.
  */
 public class VrtActivity extends BaseActivity implements GlVrt.Host {
-    static final String EXTRA_SERIES = "series";
+    static final String EXTRA_SERIES = "series", EXTRA_PRESET = "preset";
+    View cutBar;
+    boolean cutPending;
     static final int NAV = 0, CUT = 1, PICK = 2;
     static final String[] TIER_HELP = {
             "High quality: the volume is kept at up to 320 voxels on its longest side.",
@@ -190,7 +192,7 @@ public class VrtActivity extends BaseActivity implements GlVrt.Host {
                     Seg.segment(v, p, new Seg.Progress() { public void update(String m, int pct) { showBusy(m + "… " + pct + "%"); } });
                 } catch (OutOfMemoryError oom) {
                     err = "Not enough memory for this quality. Choose a lower quality in Display.";
-                } catch (Throwable t) { err = t.getMessage() == null ? t.toString() : t.getMessage(); }
+                } catch (Throwable t) { err = Ui.friendly(t); }
                 final String fe = err;
                 final Vol3D fv = v;
                 final Seg.Params fp = p;
@@ -210,6 +212,10 @@ public class VrtActivity extends BaseActivity implements GlVrt.Host {
                             st = new VrtState();
                             st.defaults(vol.ct, fp.vessel);
                             st.preset(vol.ct ? 0 : 3, vol.ct);
+                            String want = getIntent().getStringExtra(EXTRA_PRESET);
+                            if ("bone".equals(want)) st.preset(2, vol.ct);
+                            else if ("vessels".equals(want)) st.preset(1, vol.ct);
+                            else if ("all".equals(want)) st.preset(3, vol.ct);
                             st.winC = vol.ct ? 300 : vol.defWc;
                             st.winW = vol.ct ? 900 : vol.defWw;
                         }
@@ -234,9 +240,43 @@ public class VrtActivity extends BaseActivity implements GlVrt.Host {
             items[0] = "Start fresh (automatic separation)";
             for (int i = 0; i < saved.size(); i++) items[i + 1] = saved.get(i).name + "  ·  " + fmt(saved.get(i).created);
             new AlertDialog.Builder(this).setTitle("Continue a saved session?").setItems(items, new DialogInterface.OnClickListener() {
-                public void onClick(DialogInterface d, int w) { if (w > 0) openState(saved.get(w - 1)); }
+                public void onClick(DialogInterface d, int w) { if (w > 0) openState(saved.get(w - 1)); else if (wantsHeart()) isolateHeart(true); }
             }).show();
-        } else if (st.params.summary.length() > 0) Ui.toast(this, st.params.summary);
+        } else if (wantsHeart()) isolateHeart(true);
+        else if (st.params.summary.length() > 0) Ui.toast(this, st.params.summary);
+    }
+
+    /** Cardiac CT angiography: opened for coronary 3D, or recognized from the study description, with contrast. */
+    boolean wantsHeart() {
+        if (vol == null || !vol.ct || !st.params.contrast) return false;
+        String want = getIntent().getStringExtra(EXTRA_PRESET);
+        if ("coronary".equals(want)) return true;
+        if (want != null) return false;
+        return StudyType.CARDIAC_CTA.equals(StudyType.detect(series.modality, series.study.desc, series.desc, "", "", ""));
+    }
+
+    /** Hides everything except the heart and great vessels, as one undoable step. */
+    void isolateHeart(final boolean auto) {
+        if (vol == null) return;
+        busyNow = true;
+        showBusy("Isolating the heart…");
+        worker.submit(new Runnable() {
+            public void run() {
+                final Seg.IntList rm = Seg.isolateHeart(vol, new Seg.Progress() { public void update(String m, int pct) { showBusy(m + "… " + pct + "%"); } });
+                h.post(new Runnable() {
+                    public void run() {
+                        busyNow = false;
+                        showBusy(null);
+                        if (rm.size == 0) { Ui.toast(VrtActivity.this, "No contrast-filled heart was found, so nothing was hidden."); return; }
+                        push(Seg.set(vol, "Isolate heart", rm, true, 0));
+                        st.preset(0, true);
+                        tfChanged();
+                        Ui.toast(VrtActivity.this, auto ? "Cardiac CT recognized: the heart is isolated. Tap Undo to see the whole chest."
+                                : "Heart isolated. Tap Undo to bring the rest back.");
+                    }
+                });
+            }
+        });
     }
 
     void attach() {
@@ -375,9 +415,9 @@ public class VrtActivity extends BaseActivity implements GlVrt.Host {
             int a = e.getActionMasked();
             if (tool == CUT) {
                 float x = e.getX(), y = e.getY();
-                if (a == MotionEvent.ACTION_DOWN) { pts.clear(); pts.add(x); pts.add(y); }
+                if (a == MotionEvent.ACTION_DOWN) { hideCutBar(); pts.clear(); pts.add(x); pts.add(y); }
                 else if (a == MotionEvent.ACTION_MOVE) { pts.add(x); pts.add(y); invalidate(); }
-                else if (a == MotionEvent.ACTION_UP) { if (pts.size() >= 8) cutMenu(toArray(pts)); pts.clear(); invalidate(); }
+                else if (a == MotionEvent.ACTION_UP) { if (pts.size() >= 8) showCutBar(toArray(pts)); else pts.clear(); invalidate(); }
                 return true;
             }
             if (tool == PICK) return true;
@@ -432,9 +472,9 @@ public class VrtActivity extends BaseActivity implements GlVrt.Host {
                 c.drawPath(pa, path);
             }
             if (tool != NAV && vol != null) {
-                String hint = tool == CUT ? "Draw around what to cut" : "Tap a structure";
+                String hint = tool == CUT ? (cutPending ? "Choose an action below. Long-press an icon to see what it does." : "Draw around what to cut") : "Tap a structure";
                 float w = label.measureText(hint);
-                c.drawText(hint, (getWidth() - w) / 2, getHeight() - Ui.dp(getContext(), 34), label);
+                c.drawText(hint, (getWidth() - w) / 2, getHeight() - Ui.dp(getContext(), cutPending ? 96 : 34), label);
             }
         }
     }
@@ -592,14 +632,32 @@ public class VrtActivity extends BaseActivity implements GlVrt.Host {
         }).show();
     }
 
-    void cutMenu(final float[] poly) {
-        String[] items = {"Remove inside the outline", "Keep only inside the outline", "Move visible tissue inside to a class…"};
-        new AlertDialog.Builder(this).setTitle("Cut").setItems(items, new DialogInterface.OnClickListener() {
-            public void onClick(DialogInterface d, final int w) {
-                if (w == 2) chooseClass("Move inside to", new Ui.OnChoice() { public void choose(int c) { runCut(poly, true, c); } });
-                else runCut(poly, w == 0, -1);
+    static final String[] CUT_ICONS = {"scissors", "keepin", "recolor", "close"};
+    static final String[] CUT_LABELS = {"Remove what's inside the outline", "Keep only what's inside the outline", "Move visible tissue inside to a tissue class", "Cancel"};
+
+    /** Icon bar over the 3D view after drawing an outline; long-press an icon to see what it does. */
+    void showCutBar(final float[] poly) {
+        hideCutBar();
+        cutPending = true;
+        LinearLayout bar = Ui.iconBar(this, CUT_ICONS, CUT_LABELS, new Ui.OnChoice() {
+            public void choose(int w) {
+                hideCutBar();
+                if (w == 0) runCut(poly, true, -1);
+                else if (w == 1) runCut(poly, false, -1);
+                else if (w == 2) chooseClass("Move inside to", new Ui.OnChoice() { public void choose(int c) { runCut(poly, true, c); } });
             }
-        }).setNegativeButton("Cancel", null).show();
+        });
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+        lp.bottomMargin = Ui.dp(this, 20);
+        stage.addView(bar, lp);
+        cutBar = bar;
+        overlay.invalidate();
+    }
+
+    void hideCutBar() {
+        if (cutBar != null && cutBar.getParent() != null) ((ViewGroup) cutBar.getParent()).removeView(cutBar);
+        cutBar = null;
+        if (cutPending) { cutPending = false; overlay.pts.clear(); overlay.invalidate(); }
     }
 
     /** Cuts through the whole depth, as seen from the current view. cls >= 0 moves visible tissue instead of removing. */
@@ -667,6 +725,11 @@ public class VrtActivity extends BaseActivity implements GlVrt.Host {
                         }).setNegativeButton("Cancel", null).show();
             }
         });
+        if (vol.ct) {
+            LinearLayout hg = Ui.group(this, c, "Cardiac CT");
+            Ui.actionRow(this, hg, "cube", "Isolate heart", new View.OnClickListener() { public void onClick(View v) { sheet.close(); isolateHeart(false); } });
+            note(c, "Keeps the contrast-filled heart, great vessels, coronary arteries, and myocardium; hides chest wall, spine, ribs, lungs, and pulmonary vessels. Undo reverses it.");
+        }
         for (int i = 1; i < 8; i++) classCard(c, i);
     }
 
@@ -859,7 +922,7 @@ public class VrtActivity extends BaseActivity implements GlVrt.Host {
                     try {
                         String ser = VrtStore.capturesSeries(series.study);
                         VrtStore.saveCapture(series, argb, w, hh, ser, VrtStore.CAPTURES_DESC, 9902, VrtStore.nextInstance(series.study, ser));
-                    } catch (Exception e) { err = e.getMessage(); }
+                    } catch (Exception e) { err = Ui.friendly(e); }
                     final String fe = err;
                     h.post(new Runnable() {
                         public void run() {
@@ -919,7 +982,7 @@ public class VrtActivity extends BaseActivity implements GlVrt.Host {
             public void run() {
                 String err = null;
                 try { VrtStore.saveCapture(series, argb, w, hh, rotSeries, "3D VRT rotation (" + ROT_FRAMES + " views)", 9903, i + 1); }
-                catch (Exception e) { err = e.getMessage(); }
+                catch (Exception e) { err = Ui.friendly(e); }
                 final String fe = err;
                 h.post(new Runnable() {
                     public void run() {
@@ -976,7 +1039,7 @@ public class VrtActivity extends BaseActivity implements GlVrt.Host {
                         worker.submit(new Runnable() {
                             public void run() {
                                 String err = null;
-                                try { VrtStore.saveState(series, s, vol); } catch (Exception e) { err = e.getMessage(); }
+                                try { VrtStore.saveState(series, s, vol); } catch (Exception e) { err = Ui.friendly(e); }
                                 final String fe = err;
                                 h.post(new Runnable() {
                                     public void run() {
@@ -1010,7 +1073,7 @@ public class VrtActivity extends BaseActivity implements GlVrt.Host {
         worker.submit(new Runnable() {
             public void run() {
                 String err = null;
-                try { VrtStore.loadLabels(s, vol); } catch (Exception e) { err = e.getMessage(); }
+                try { VrtStore.loadLabels(s, vol); } catch (Exception e) { err = Ui.friendly(e); }
                 final String fe = err;
                 h.post(new Runnable() {
                     public void run() {

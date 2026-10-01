@@ -1,6 +1,6 @@
 # Intended use and limitations
 
-*Applies to Insula DICOM Viewer 1.8.0. Last updated 29 September 2026.*
+*Applies to Insula DICOM Viewer 1.9.0. Last updated 29 September 2026.*
 
 ## Product description
 
@@ -30,6 +30,10 @@ Insula is **not registered, cleared, or certified as a medical device** by any r
 ## Intended users
 
 Healthcare professionals, medical students and educators, and patients viewing their own images. Users are expected to understand that a phone is not a diagnostic reading environment.
+
+## Measurement reference values
+
+Measurement shortcuts (for example ADI, BDI, canal diameter, midline shift, and hematoma volume) show commonly cited reference values. These vary between sources, age groups, and techniques, and are shown for guidance only, not as diagnostic thresholds.
 
 ## Known limitations
 

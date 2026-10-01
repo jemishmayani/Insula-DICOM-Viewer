@@ -43,6 +43,8 @@ final class MeasureBar {
             {DicomView.T_LENGTH, "length", "Length"},
             {DicomView.T_ANGLE, "angle", "Angle"},
             {DicomView.T_COBB, "cobb", "Cobb angle"},
+            {DicomView.T_PTLINE, "ptline", "Point to line (midline shift, Chamberlain)"},
+            {DicomView.T_ABC, "abc", "Hematoma volume (ABC/2)"},
             {DicomView.T_ELLIPSE, "ellipse", "Ellipse ROI (area, mean, SD)"},
             {DicomView.T_RECT, "rect", "Rectangle ROI (area, mean, SD)"},
             {DicomView.T_PROBE, "probe", "Pixel value / HU"},

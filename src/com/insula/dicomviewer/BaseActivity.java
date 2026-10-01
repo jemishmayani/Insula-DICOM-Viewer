@@ -184,7 +184,7 @@ public class BaseActivity extends Activity {
     }
 
     void runExportSet(final List<Library.Study> studies, final String name, final boolean anon) {
-        final ProgressDialog pd = new ProgressDialog(this);
+        final Ui.Busy pd = new Ui.Busy(this);
         pd.setMessage("Packing study set…");
         pd.setCancelable(false);
         pd.show();
@@ -201,7 +201,7 @@ public class BaseActivity extends Activity {
                             ui.post(new Runnable() { public void run() { pd.setMessage("Packing study set… " + done + " of " + total); } });
                         }
                     });
-                } catch (Exception e) { err = e.getMessage(); }
+                } catch (Exception e) { err = Ui.friendly(e); }
                 final String fe = err;
                 final int fn = n;
                 Store.log(BaseActivity.this, "share", "Exported study set \"" + name + "\"", fe == null ? fn + " files, " + Library.fmtSize(out.length()) + (anon ? ", anonymized" : "") : "Failed: " + fe, fe == null);
@@ -218,7 +218,7 @@ public class BaseActivity extends Activity {
 
     /** Imports a study-set ZIP (or any DICOM/ZIP file) and applies its measurements, key images, and albums. */
     void importStudySet(final android.net.Uri uri, final Runnable after) {
-        final ProgressDialog pd = new ProgressDialog(this);
+        final Ui.Busy pd = new Ui.Busy(this);
         pd.setMessage("Importing study set…");
         pd.setCancelable(false);
         pd.show();
@@ -231,7 +231,7 @@ public class BaseActivity extends Activity {
                     java.io.InputStream in = getContentResolver().openInputStream(uri);
                     Library.importStream(in, st, null, man);
                     in.close();
-                } catch (Exception e) { err = e.getMessage(); }
+                } catch (Exception e) { err = Ui.friendly(e); }
                 StringBuilder sb = new StringBuilder();
                 for (byte[] m : man) { String r = Backup.applyManifest(BaseActivity.this, m); if (!r.isEmpty()) sb.append(r).append(". "); }
                 final String fe = err, extra = sb.toString();

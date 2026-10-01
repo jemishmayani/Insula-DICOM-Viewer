@@ -62,8 +62,12 @@ public class SmoothViewingTest {
         boolean same = full.w == fast.w && full.h == fast.h && full.rowSp == fast.rowSp;
         for (int y = 0; y < full.h && same; y += 2) for (int x = 0; x < full.w; x += 2) if (full.pix[y * full.w + x] != fast.pix[y * full.w + x]) { same = false; break; }
         check("interactive MPR preview keeps size, spacing, and sampled values", same, full.w + "x" + full.h);
-        t0 = System.nanoTime(); for (int i = 0; i < 10; i++) v.reslice(pl, 20, Volume.MIP, 1); long tFull = (System.nanoTime() - t0) / 10;
-        t0 = System.nanoTime(); for (int i = 0; i < 10; i++) v.reslice(pl, 20, Volume.MIP, 2); long tFast = (System.nanoTime() - t0) / 10;
+        // Best of several runs: the minimum reflects the work done, not scheduling noise on a busy machine.
+        long tFull = Long.MAX_VALUE, tFast = Long.MAX_VALUE;
+        for (int i = 0; i < 12; i++) {
+            t0 = System.nanoTime(); v.reslice(pl, 20, Volume.MIP, 1); tFull = Math.min(tFull, System.nanoTime() - t0);
+            t0 = System.nanoTime(); v.reslice(pl, 20, Volume.MIP, 2); tFast = Math.min(tFast, System.nanoTime() - t0);
+        }
         System.out.printf("     20 mm MIP reslice: full %.1f ms, while dragging %.1f ms%n", tFull / 1e6, tFast / 1e6);
         check("MPR preview is at least 2.5x faster", tFull > 2.5 * tFast, "");
 
